@@ -102,6 +102,42 @@ jobs:
           print("build.gradle.kts:")
           print(gradle.read_text())
           PY
+                - name: Enable core library desugaring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = Path("android/app/build.gradle.kts")
+
+          if not gradle.exists():
+              raise SystemExit("android/app/build.gradle.kts nicht gefunden")
+
+          text = gradle.read_text()
+
+          if "isCoreLibraryDesugaringEnabled = true" not in text:
+              text = re.sub(
+                  r'compileOptions\s*\{',
+                  'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
+                  text,
+                  count=1
+              )
+
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")' not in text:
+              if "dependencies {" in text:
+                  text = text.replace(
+                      "dependencies {",
+                      'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")',
+                      1
+                  )
+              else:
+                  text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")\n}\n'
+
+          gradle.write_text(text)
+
+          print("===== android/app/build.gradle.kts =====")
+          print(text)
+          PY
       - name: Restore google-services.json
         run: |
           mkdir -p android/app
