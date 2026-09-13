@@ -29,33 +29,43 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _loadRole() async {
-    final user = _supabase.auth.currentUser;
+  final user = _supabase.auth.currentUser;
 
-    if (user == null) {
-      return;
-    }
-
-    try {
-      final profile = await _supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (!mounted) return;
-
-      setState(() {
-        _isTrainer = profile?['role'] == 'ausbilder';
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _isTrainer = false;
-      });
-    }
+  if (user == null) {
+    debugPrint('Kein Benutzer angemeldet');
+    return;
   }
 
+  try {
+    final profile = await _supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    debugPrint('User-ID: ${user.id}');
+    debugPrint('Profil: $profile');
+
+    if (!mounted) return;
+
+    final role = profile?['role']?.toString();
+
+    setState(() {
+      _isTrainer = role == 'ausbilder';
+    });
+
+    debugPrint('Rolle: $role');
+    debugPrint('Ist Ausbilder: $_isTrainer');
+  } catch (error) {
+    debugPrint('Fehler beim Laden der Rolle: $error');
+
+    if (!mounted) return;
+
+    setState(() {
+      _isTrainer = false;
+    });
+  }
+}
   Future<void> _loadEvents() async {
     if (mounted) {
       setState(() {
