@@ -69,7 +69,12 @@ jobs:
                   )
                   app_gradle.write_text(text)
           PY
-
+      - name: Check pubspec assets
+        run: |
+          echo "===== pubspec.yaml ====="
+          cat pubspec.yaml
+          echo "===== Suche nach logo.jpg ====="
+          grep -n "logo.jpg" pubspec.yaml || echo "OK: logo.jpg ist nicht eingetragen"
       - name: Flutter Pub get
         run: flutter pub get
 
