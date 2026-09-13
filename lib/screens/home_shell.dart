@@ -1,4 +1,5 @@
 import 'events_screen.dart';
+import 'events_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -116,7 +117,7 @@ class _DashboardPage extends StatelessWidget {
         const _DashboardCard(
           icon: Icons.calendar_month,
           title: 'Nächster Dienst',
-          subtitle: 'Noch kein Termin eingetragen',
+          subtitle:const EventsScreen(),
         ),
         const SizedBox(height: 14),
         const _DashboardCard(
