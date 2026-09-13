@@ -37,6 +37,7 @@ jobs:
 
       - name: Restore google-services.json
         run: |
+          mkdir -p android/app
           echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
 
       - name: Enable Google Services plugin
@@ -44,9 +45,9 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          p = Path("android/settings.gradle.kts")
-          if p.exists():
-              text = p.read_text()
+          settings = Path("android/settings.gradle.kts")
+          if settings.exists():
+              text = settings.read_text()
 
               if 'id("com.google.gms.google-services")' not in text:
                   text = text.replace(
@@ -54,11 +55,11 @@ jobs:
                       'plugins {\n    id("com.google.gms.google-services") version "4.4.2" apply false',
                       1
                   )
-                  p.write_text(text)
+                  settings.write_text(text)
 
-          p = Path("android/app/build.gradle.kts")
-          if p.exists():
-              text = p.read_text()
+          app_gradle = Path("android/app/build.gradle.kts")
+          if app_gradle.exists():
+              text = app_gradle.read_text()
 
               if 'id("com.google.gms.google-services")' not in text:
                   text = text.replace(
@@ -66,32 +67,41 @@ jobs:
                       'plugins {\n    id("com.google.gms.google-services")',
                       1
                   )
-                  p.write_text(text)
+                  app_gradle.write_text(text)
           PY
 
       - name: Flutter Pub get
         run: flutter pub get
 
-      - name: Build APK
+      - name: Check Flutter entry point
         run: |
-          flutter build apk --release \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          echo "Repository root:"
+          ls -la
+
+          echo "lib directory:"
+          ls -la lib
+
+          if [ ! -f "lib/main.dart" ]; then
+            echo "FEHLER: lib/main.dart fehlt."
+            exit 1
+          fi
+
+      - name: Build APK
+        run: flutter build apk --release --target=lib/main.dart --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
 
       - name: Build App Bundle
-        run: |
-          flutter build appbundle --release \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+        run: flutter build appbundle --release --target=lib/main.dart --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: jf-seehausen-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
           name: jf-seehausen-aab
           path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
