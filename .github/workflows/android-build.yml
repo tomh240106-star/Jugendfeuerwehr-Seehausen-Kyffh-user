@@ -1,0 +1,97 @@
+name: Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Check Flutter version
+        run: flutter --version
+
+      - name: Create Android project if missing
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create . --platforms=android
+          fi
+
+      - name: Restore google-services.json
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
+
+      - name: Enable Google Services plugin
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/settings.gradle.kts")
+          if p.exists():
+              text = p.read_text()
+
+              if 'id("com.google.gms.google-services")' not in text:
+                  text = text.replace(
+                      'plugins {',
+                      'plugins {\n    id("com.google.gms.google-services") version "4.4.2" apply false',
+                      1
+                  )
+                  p.write_text(text)
+
+          p = Path("android/app/build.gradle.kts")
+          if p.exists():
+              text = p.read_text()
+
+              if 'id("com.google.gms.google-services")' not in text:
+                  text = text.replace(
+                      'plugins {',
+                      'plugins {\n    id("com.google.gms.google-services")',
+                      1
+                  )
+                  p.write_text(text)
+          PY
+
+      - name: Flutter Pub get
+        run: flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Build App Bundle
+        run: |
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jf-seehausen-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: jf-seehausen-aab
+          path: build/app/outputs/bundle/release/app-release.aab
