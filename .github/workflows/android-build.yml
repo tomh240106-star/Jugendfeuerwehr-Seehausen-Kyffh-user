@@ -147,7 +147,7 @@ jobs:
               raise SystemExit("Keine Android-App-Gradle-Datei gefunden")
           PY
 
-      - name: Enable core library desugaring
+                 - name: Enable core library desugaring
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -159,75 +159,104 @@ jobs:
           if kts.exists():
               text = kts.read_text()
 
-              replacement = '''compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-        isCoreLibraryDesugaringEnabled = true
-    }'''
-
-              if re.search(r'compileOptions\s*\{.*?\}', text, flags=re.S):
-                  text = re.sub(
-                      r'compileOptions\s*\{.*?\}',
-                      replacement,
-                      text,
-                      count=1,
-                      flags=re.S
-                  )
-              else:
-                  text = text.replace(
-                      "android {",
-                      "android {\n    " + replacement + "\n",
-                      1
-                  )
-
-              dep = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")'
-
-              if dep not in text:
-                  if "dependencies {" in text:
-                      text = text.replace("dependencies {", f"dependencies {{\n    {dep}", 1)
+              # Nur Desugaring in vorhandenen compileOptions-Block einfügen
+              if "isCoreLibraryDesugaringEnabled = true" not in text:
+                  if re.search(r'compileOptions\s*\{', text):
+                      text = re.sub(
+                          r'compileOptions\s*\{',
+                          '''compileOptions {
+        isCoreLibraryDesugaringEnabled = true''',
+                          text,
+                          count=1
+                      )
                   else:
-                      text += f"\n\ndependencies {{\n    {dep}\n}}\n"
+                      text = text.replace(
+                          "android {",
+                          '''android {
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+    }
+''',
+                          1
+                      )
+
+              dependency = (
+                  'coreLibraryDesugaring('
+                  '"com.android.tools:desugar_jdk_libs:2.1.5"'
+                  ')'
+              )
+
+              if dependency not in text:
+                  if "dependencies {" in text:
+                      text = text.replace(
+                          "dependencies {",
+                          f'''dependencies {{
+    {dependency}''',
+                          1
+                      )
+                  else:
+                      text += f'''
+
+dependencies {{
+    {dependency}
+}}
+'''
 
               kts.write_text(text)
 
           elif groovy.exists():
               text = groovy.read_text()
 
-              replacement = '''compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-        coreLibraryDesugaringEnabled true
-    }'''
-
-              if re.search(r'compileOptions\s*\{.*?\}', text, flags=re.S):
-                  text = re.sub(
-                      r'compileOptions\s*\{.*?\}',
-                      replacement,
-                      text,
-                      count=1,
-                      flags=re.S
-                  )
-              else:
-                  text = text.replace(
-                      "android {",
-                      "android {\n    " + replacement + "\n",
-                      1
-                  )
-
-              dep = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'"
-
-              if dep not in text:
-                  if "dependencies {" in text:
-                      text = text.replace("dependencies {", f"dependencies {{\n    {dep}", 1)
+              # Groovy-Version
+              if "coreLibraryDesugaringEnabled true" not in text:
+                  if re.search(r'compileOptions\s*\{', text):
+                      text = re.sub(
+                          r'compileOptions\s*\{',
+                          '''compileOptions {
+        coreLibraryDesugaringEnabled true''',
+                          text,
+                          count=1
+                      )
                   else:
-                      text += f"\n\ndependencies {{\n    {dep}\n}}\n"
+                      text = text.replace(
+                          "android {",
+                          '''android {
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+    }
+''',
+                          1
+                      )
+
+              dependency = (
+                  "coreLibraryDesugaring "
+                  "'com.android.tools:desugar_jdk_libs:2.1.5'"
+              )
+
+              if dependency not in text:
+                  if "dependencies {" in text:
+                      text = text.replace(
+                          "dependencies {",
+                          f'''dependencies {{
+    {dependency}''',
+                          1
+                      )
+                  else:
+                      text += f'''
+
+dependencies {{
+    {dependency}
+}}
+'''
 
               groovy.write_text(text)
 
           else:
-              raise SystemExit("Keine Gradle-Datei gefunden")
+              raise SystemExit(
+                  "Keine android/app/build.gradle-Datei gefunden"
+              )
 
-          print("Core library desugaring wurde aktiviert.")
+          print("Core Library Desugaring aktiviert.")
           PY
 
       - name: Verify Android configuration
