@@ -34,7 +34,74 @@ jobs:
           if [ ! -d "android" ]; then
             flutter create . --platforms=android
           fi
+      - name: Set Android package name
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import shutil
 
+          package_name = "de.jfseehausen.kyffhaeuser"
+
+          gradle = Path("android/app/build.gradle.kts")
+
+          if not gradle.exists():
+              raise SystemExit("android/app/build.gradle.kts wurde nicht gefunden")
+
+          text = gradle.read_text()
+
+          text = re.sub(
+              r'namespace\s*=\s*"[^"]+"',
+              f'namespace = "{package_name}"',
+              text
+          )
+
+          text = re.sub(
+              r'applicationId\s*=\s*"[^"]+"',
+              f'applicationId = "{package_name}"',
+              text
+          )
+
+          gradle.write_text(text)
+
+          # MainActivity suchen
+          candidates = list(
+              Path("android/app/src/main/kotlin").rglob("MainActivity.kt")
+          )
+
+          if candidates:
+              old_file = candidates[0]
+
+              content = old_file.read_text()
+
+              content = re.sub(
+                  r'^package\s+.*$',
+                  f'package {package_name}',
+                  content,
+                  count=1,
+                  flags=re.MULTILINE
+              )
+
+              new_dir = Path(
+                  "android/app/src/main/kotlin/de/jfseehausen/kyffhaeuser"
+              )
+
+              new_dir.mkdir(
+                  parents=True,
+                  exist_ok=True
+              )
+
+              new_file = new_dir / "MainActivity.kt"
+              new_file.write_text(content)
+
+              if old_file.resolve() != new_file.resolve():
+                  old_file.unlink()
+
+          print("Android package gesetzt auf:", package_name)
+          print("")
+          print("build.gradle.kts:")
+          print(gradle.read_text())
+          PY
       - name: Restore google-services.json
         run: |
           mkdir -p android/app
