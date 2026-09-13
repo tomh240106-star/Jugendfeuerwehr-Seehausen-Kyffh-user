@@ -1,3 +1,4 @@
+import 'events_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -13,10 +14,7 @@ class _HomeShellState extends State<HomeShell> {
 
   final List<Widget> _pages = const [
     _DashboardPage(),
-    _SimplePage(
-      icon: Icons.calendar_month,
-      title: 'Termine',
-      text: 'Hier werden später Dienste und Veranstaltungen angezeigt.',
+    EventsScreen(),
     ),
     _SimplePage(
       icon: Icons.school_outlined,
