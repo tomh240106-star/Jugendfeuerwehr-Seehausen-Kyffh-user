@@ -85,7 +85,12 @@ jobs:
             echo "FEHLER: lib/main.dart fehlt."
             exit 1
           fi
-
+      - name: Show actual main.dart used by build
+        run: |
+          echo "===== aktuelle lib/main.dart ====="
+          sed -n '1,140p' lib/main.dart
+          echo "===== Suche nach problematischer Kurzschreibweise ====="
+          grep -nE ':\s*\.(fromSeed|center|start|end|spaceBetween|spaceAround|spaceEvenly)' lib/main.dart || true
       - name: Build APK
         run: flutter build apk --release --target=lib/main.dart --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}" --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
 
