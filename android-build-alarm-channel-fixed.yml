@@ -1,0 +1,392 @@
+name: Android Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: flutter --version
+
+      - name: Check Android project
+        run: |
+          if [ ! -f "android/app/build.gradle.kts" ] && [ ! -f "android/app/build.gradle" ]; then
+            echo "FEHLER: Das Android-Projekt ist unvollständig."
+            echo "Aus Sicherheitsgründen wird android/ NICHT automatisch neu erzeugt,"
+            echo "weil sonst die nativen Alarm-Dateien überschrieben werden könnten."
+            exit 1
+          fi
+
+      - name: Set Android package name
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          package_name = "de.jfseehausen.kyffhaeuser"
+
+          kts = Path("android/app/build.gradle.kts")
+          groovy = Path("android/app/build.gradle")
+
+          if kts.exists():
+              text = kts.read_text()
+              text = re.sub(
+                  r'namespace\s*=\s*"[^"]+"',
+                  f'namespace = "{package_name}"',
+                  text
+              )
+              text = re.sub(
+                  r'applicationId\s*=\s*"[^"]+"',
+                  f'applicationId = "{package_name}"',
+                  text
+              )
+              kts.write_text(text)
+
+          elif groovy.exists():
+              text = groovy.read_text()
+              text = re.sub(
+                  r'namespace\s+["\'][^"\']+["\']',
+                  f'namespace "{package_name}"',
+                  text
+              )
+              text = re.sub(
+                  r'applicationId\s+["\'][^"\']+["\']',
+                  f'applicationId "{package_name}"',
+                  text
+              )
+              groovy.write_text(text)
+
+          else:
+              raise SystemExit("Keine Android-App-Gradle-Datei gefunden")
+
+          print("Android package gesetzt auf:", package_name)
+          PY
+
+      - name: Verify native alarm integration
+        run: |
+          set -e
+
+          MAIN_ACTIVITY="android/app/src/main/kotlin/de/jfseehausen/kyffhaeuser/MainActivity.kt"
+          ALARM_SERVICE="android/app/src/main/kotlin/de/jfseehausen/kyffhaeuser/AlarmForegroundService.kt"
+          FCM_SERVICE="android/app/src/main/kotlin/de/jfseehausen/kyffhaeuser/JfFirebaseMessagingService.kt"
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          ALARM_SOUND="android/app/src/main/res/raw/jf_alarm.wav"
+
+          test -f "$MAIN_ACTIVITY" || {
+            echo "FEHLER: $MAIN_ACTIVITY fehlt."
+            exit 1
+          }
+
+          test -f "$ALARM_SERVICE" || {
+            echo "FEHLER: $ALARM_SERVICE fehlt."
+            exit 1
+          }
+
+          test -f "$FCM_SERVICE" || {
+            echo "FEHLER: $FCM_SERVICE fehlt."
+            exit 1
+          }
+
+          test -f "$MANIFEST" || {
+            echo "FEHLER: $MANIFEST fehlt."
+            exit 1
+          }
+
+          test -f "$ALARM_SOUND" || {
+            echo "FEHLER: $ALARM_SOUND fehlt."
+            exit 1
+          }
+
+          grep -q 'package de.jfseehausen.kyffhaeuser' "$MAIN_ACTIVITY" || {
+            echo "FEHLER: MainActivity hat den falschen package-Namen."
+            exit 1
+          }
+
+          grep -q 'de.jfseehausen.kyffhaeuser/alarm_service' "$MAIN_ACTIVITY" || {
+            echo "FEHLER: Der Alarm-MethodChannel fehlt in MainActivity.kt."
+            exit 1
+          }
+
+          grep -q 'startAlarmService' "$MAIN_ACTIVITY" || {
+            echo "FEHLER: startAlarmService fehlt in MainActivity.kt."
+            exit 1
+          }
+
+          grep -q 'AlarmForegroundService' "$MANIFEST" || {
+            echo "FEHLER: AlarmForegroundService fehlt im AndroidManifest."
+            exit 1
+          }
+
+          grep -q 'JfFirebaseMessagingService' "$MANIFEST" || {
+            echo "FEHLER: JfFirebaseMessagingService fehlt im AndroidManifest."
+            exit 1
+          }
+
+          echo "===== MainActivity.kt ====="
+          sed -n '1,220p' "$MAIN_ACTIVITY"
+
+          echo "===== AlarmForegroundService.kt ====="
+          sed -n '1,260p' "$ALARM_SERVICE"
+
+          echo "===== AndroidManifest.xml ====="
+          cat "$MANIFEST"
+
+          echo "Native Alarm-Integration ist vorhanden."
+
+      - name: Restore google-services.json
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 --decode > android/app/google-services.json
+          test -s android/app/google-services.json || (echo "google-services.json konnte nicht erstellt werden" && exit 1)
+
+      - name: Enable Google Services plugin
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          settings_kts = Path("android/settings.gradle.kts")
+          settings_groovy = Path("android/settings.gradle")
+          app_kts = Path("android/app/build.gradle.kts")
+          app_groovy = Path("android/app/build.gradle")
+
+          if settings_kts.exists():
+              text = settings_kts.read_text()
+              if 'id("com.google.gms.google-services")' not in text:
+                  text = text.replace(
+                      "plugins {",
+                      'plugins {\n    id("com.google.gms.google-services") version "4.4.2" apply false',
+                      1
+                  )
+              settings_kts.write_text(text)
+
+          elif settings_groovy.exists():
+              text = settings_groovy.read_text()
+              if "com.google.gms.google-services" not in text:
+                  text = text.replace(
+                      "plugins {",
+                      "plugins {\n    id 'com.google.gms.google-services' version '4.4.2' apply false",
+                      1
+                  )
+              settings_groovy.write_text(text)
+
+          if app_kts.exists():
+              text = app_kts.read_text()
+              if 'id("com.google.gms.google-services")' not in text:
+                  text = text.replace(
+                      "plugins {",
+                      'plugins {\n    id("com.google.gms.google-services")',
+                      1
+                  )
+              app_kts.write_text(text)
+
+          elif app_groovy.exists():
+              text = app_groovy.read_text()
+              if "com.google.gms.google-services" not in text:
+                  text = text.replace(
+                      "plugins {",
+                      "plugins {\n    id 'com.google.gms.google-services'",
+                      1
+                  )
+              app_groovy.write_text(text)
+
+          else:
+              raise SystemExit("Keine Android-App-Gradle-Datei gefunden")
+          PY
+
+      - name: Enable core library desugaring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          kts = Path("android/app/build.gradle.kts")
+          groovy = Path("android/app/build.gradle")
+
+          if kts.exists():
+              text = kts.read_text()
+
+              if "isCoreLibraryDesugaringEnabled = true" not in text:
+                  if re.search(r'compileOptions\s*\{', text):
+                      text = re.sub(
+                          r'compileOptions\s*\{',
+                          'compileOptions {\n        isCoreLibraryDesugaringEnabled = true',
+                          text,
+                          count=1
+                      )
+                  else:
+                      text = text.replace(
+                          "android {",
+                          'android {\n    compileOptions {\n        isCoreLibraryDesugaringEnabled = true\n    }\n',
+                          1
+                      )
+
+              dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")'
+
+              if dependency not in text:
+                  if "dependencies {" in text:
+                      text = text.replace(
+                          "dependencies {",
+                          f"dependencies {{\n    {dependency}",
+                          1
+                      )
+                  else:
+                      text += f"\n\ndependencies {{\n    {dependency}\n}}\n"
+
+              kts.write_text(text)
+
+          elif groovy.exists():
+              text = groovy.read_text()
+
+              if "coreLibraryDesugaringEnabled true" not in text:
+                  if re.search(r'compileOptions\s*\{', text):
+                      text = re.sub(
+                          r'compileOptions\s*\{',
+                          'compileOptions {\n        coreLibraryDesugaringEnabled true',
+                          text,
+                          count=1
+                      )
+                  else:
+                      text = text.replace(
+                          "android {",
+                          'android {\n    compileOptions {\n        coreLibraryDesugaringEnabled true\n    }\n',
+                          1
+                      )
+
+              dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'"
+
+              if dependency not in text:
+                  if "dependencies {" in text:
+                      text = text.replace(
+                          "dependencies {",
+                          f"dependencies {{\n    {dependency}",
+                          1
+                      )
+                  else:
+                      text += f"\n\ndependencies {{\n    {dependency}\n}}\n"
+
+              groovy.write_text(text)
+
+          else:
+              raise SystemExit("Keine android/app/build.gradle-Datei gefunden")
+
+          print("Core Library Desugaring aktiviert.")
+          PY
+
+      - name: Verify Android configuration
+        run: |
+          echo "===== Gradle-Konfiguration ====="
+
+          if [ -f android/app/build.gradle.kts ]; then
+            echo "--- build.gradle.kts ---"
+            grep -n -A8 -B2 "compileOptions" android/app/build.gradle.kts || true
+            grep -n "coreLibraryDesugaring" android/app/build.gradle.kts || true
+            grep -n "applicationId" android/app/build.gradle.kts || true
+            grep -n "namespace" android/app/build.gradle.kts || true
+          fi
+
+          if [ -f android/app/build.gradle ]; then
+            echo "--- build.gradle ---"
+            grep -n -A8 -B2 "compileOptions" android/app/build.gradle || true
+            grep -n "coreLibraryDesugaring" android/app/build.gradle || true
+            grep -n "applicationId" android/app/build.gradle || true
+            grep -n "namespace" android/app/build.gradle || true
+          fi
+
+      - name: Check pubspec
+        run: |
+          echo "===== pubspec.yaml ====="
+          cat pubspec.yaml
+
+          if grep -q "assets/logo.jpg" pubspec.yaml; then
+            if [ ! -f "assets/logo.jpg" ]; then
+              echo "FEHLER: assets/logo.jpg ist in pubspec.yaml eingetragen, aber fehlt."
+              exit 1
+            fi
+          fi
+
+      - name: Check Flutter files
+        run: |
+          test -f lib/main.dart || (echo "FEHLER: lib/main.dart fehlt" && exit 1)
+          test -f lib/screens/auth_screen.dart || (echo "FEHLER: lib/screens/auth_screen.dart fehlt" && exit 1)
+          test -f lib/screens/home_shell.dart || (echo "FEHLER: lib/screens/home_shell.dart fehlt" && exit 1)
+          test -f lib/services/push_service.dart || (echo "FEHLER: lib/services/push_service.dart fehlt" && exit 1)
+
+      - name: Show main.dart
+        run: |
+          echo "===== aktuelle lib/main.dart ====="
+          sed -n '1,180p' lib/main.dart
+
+      - name: Flutter clean
+        run: flutter clean
+
+      - name: Flutter Pub get
+        run: flutter pub get
+
+      - name: Verify branding assets
+        run: |
+          test -f assets/branding/logo.png || (echo "FEHLER: assets/branding/logo.png fehlt" && exit 1)
+          test -f assets/branding/header_logo.png || (echo "FEHLER: assets/branding/header_logo.png fehlt" && exit 1)
+          test -f assets/branding/splash_logo.png || (echo "FEHLER: assets/branding/splash_logo.png fehlt" && exit 1)
+          test -f assets/branding/app_icon.png || (echo "FEHLER: assets/branding/app_icon.png fehlt" && exit 1)
+
+      - name: Generate app icons
+        run: dart run flutter_launcher_icons
+
+      - name: Generate native splash screen
+        run: dart run flutter_native_splash:create
+
+      - name: Build APK
+        run: >
+          flutter build apk
+          --release
+          --target=lib/main.dart
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Build App Bundle
+        run: >
+          flutter build appbundle
+          --release
+          --target=lib/main.dart
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify build outputs
+        run: |
+          test -f build/app/outputs/flutter-apk/app-release.apk || (echo "APK wurde nicht erzeugt" && exit 1)
+          test -f build/app/outputs/bundle/release/app-release.aab || (echo "AAB wurde nicht erzeugt" && exit 1)
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jf-seehausen-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: jf-seehausen-aab
+          path: build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
