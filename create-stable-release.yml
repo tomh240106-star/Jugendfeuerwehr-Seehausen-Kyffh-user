@@ -1,0 +1,105 @@
+name: Create Stable Cross-Platform Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify stable version
+        run: |
+          set -e
+          grep -q '^version: 1.0.0+2$' pubspec.yaml || {
+            echo "FEHLER: Erwartete Version 1.0.0+2 wurde nicht gefunden."
+            exit 1
+          }
+
+      - name: Create release notes
+        run: |
+          cat > RELEASE_NOTES.md <<'EOF'
+          # Jugendfeuerwehr Seehausen/Kyffhäuser – stabiler Cross-Platform-Stand
+
+          **Version:** 1.0.0+2
+
+          Dieser Stand markiert die stabile gemeinsame Basis für Android und iOS.
+
+          ## Bestätigter Stand
+
+          - Android Build erfolgreich
+          - iOS Build erfolgreich (unsigned)
+          - gemeinsamer Flutter-Code
+          - gemeinsame Supabase-Datenbank
+          - gemeinsame Benutzerkonten und Rollen
+          - Termine und Anwesenheit
+          - Ausbildungspläne
+          - Nachrichten / Chat
+          - Dokumente
+          - Eltern-Kind-Verknüpfung
+          - Jugendfeuerwehr-Alarm
+          - Firebase-Push-Infrastruktur plattformübergreifend vorbereitet
+          - getrennte Android-/iOS-Erzeugung von App-Icons und Splashscreen
+
+          ## Android
+
+          Android ist intern test- und nutzbar. Der Jugendfeuerwehr-Alarm unterstützt dort den bereits implementierten dauerhaften Alarm bis zur Rückmeldung bzw. Beendigung.
+
+          ## iOS
+
+          Die App kompiliert erfolgreich als unsigned iOS-Build. Für den Einsatz auf echten iPhones fehlen noch Apple Developer Signing/Provisioning, APNs-Konfiguration in Firebase und ein Test auf einem echten iPhone.
+
+          Der iOS-Alarm ist für Time-Sensitive Notifications mit eigenem Alarmton vorbereitet. Apple Critical Alerts benötigen eine gesonderte Apple-Freigabe.
+
+          ## Technische Kennungen
+
+          - Bundle/Package ID: `de.jfseehausen.kyffhaeuser`
+          - iOS Mindestversion: 15.0
+          - Release-Tag: `v1.0.0-build2-crossplatform`
+
+          ## Sicherheit
+
+          Service-Role-Schlüssel und Firebase-Service-Account-Private-Keys gehören ausschließlich in sichere Server-/Secret-Speicher und niemals in den Client oder das Repository.
+          EOF
+
+      - name: Create tag and GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+
+          TAG="v1.0.0-build2-crossplatform"
+
+          git fetch --tags
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG existiert bereits."
+          else
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG existiert bereits."
+          else
+            gh release create "$TAG" \
+              --title "Jugendfeuerwehr Seehausen/Kyffhäuser 1.0.0+2 – Cross-Platform" \
+              --notes-file RELEASE_NOTES.md \
+              --verify-tag
+          fi
+
+      - name: Summary
+        run: |
+          echo "### Stabiler Cross-Platform-Stand gesichert" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: 1.0.0+2" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: v1.0.0-build2-crossplatform" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
