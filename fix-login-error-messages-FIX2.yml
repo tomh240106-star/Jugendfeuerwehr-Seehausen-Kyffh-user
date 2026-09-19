@@ -1,0 +1,122 @@
+name: Fix Login Error Messages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-login-errors:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Patch auth error handling
+        shell: bash
+        run: |
+          set -e
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/screens/auth_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          start = text.find("  String _friendlyAuthMessage(String message) {")
+          end = text.find("  Future<void> _resetPassword() async {", start)
+
+          if start == -1 or end == -1:
+              raise SystemExit("Auth-Fehlerfunktion wurde nicht gefunden.")
+
+          replacement = '''  String _friendlyAuthMessage(String message) {
+            final lower = message.toLowerCase();
+
+            if (lower.contains('invalid login credentials') ||
+                lower.contains('invalid credentials') ||
+                lower.contains('email or password')) {
+              return 'E-Mail-Adresse oder Passwort ist falsch.';
+            }
+
+            if (lower.contains('email not confirmed')) {
+              return 'Bitte bestätige zuerst deine E-Mail-Adresse.';
+            }
+
+            if (lower.contains('user already registered')) {
+              return 'Für diese E-Mail-Adresse besteht bereits ein Konto.';
+            }
+
+            if (_registerMode &&
+                (lower.contains('password') ||
+                    lower.contains('weak') ||
+                    lower.contains('characters'))) {
+              return 'Das Passwort erfüllt die Anforderungen nicht.';
+            }
+
+            if (lower.contains('network') ||
+                lower.contains('socket') ||
+                lower.contains('connection')) {
+              return 'Verbindung zum Server fehlgeschlagen. Bitte Internetverbindung prüfen und erneut versuchen.';
+            }
+
+            return 'Anmeldung fehlgeschlagen: $message';
+          }
+
+          '''
+
+          text = text[:start] + replacement + text[end:]
+          path.write_text(text, encoding="utf-8")
+          print("auth_screen.dart wurde angepasst.")
+          PY
+
+      - name: Format
+        run: dart format lib/screens/auth_screen.dart
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Web build test
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add lib/screens/auth_screen.dart
+
+          if git diff --cached --quiet; then
+            echo "Fix bereits vorhanden."
+            exit 0
+          fi
+
+          git commit -m "Fix login error messages"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Login-Fehlermeldungen verbessert" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Passwort-Anforderungen nur noch bei Registrierung" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Falsche Zugangsdaten werden korrekt erkannt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Netzwerkfehler werden separat angezeigt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Flutter Analyze und Web Build erfolgreich" >> "$GITHUB_STEP_SUMMARY"
