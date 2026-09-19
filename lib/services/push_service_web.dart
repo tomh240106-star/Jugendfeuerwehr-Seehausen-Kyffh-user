@@ -62,13 +62,12 @@ class PushService {
     final user = client.auth.currentUser;
     if (user == null) return;
 
-    await client.from('device_tokens').upsert(
-      {
-        'user_id': user.id,
-        'token': token,
-        'platform': 'web',
+    await client.rpc(
+      'claim_device_token',
+      params: {
+        'p_token': token,
+        'p_platform': 'web',
       },
-      onConflict: 'token',
     );
   }
 
