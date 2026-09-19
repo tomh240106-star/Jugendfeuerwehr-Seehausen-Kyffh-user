@@ -1,0 +1,112 @@
+name: Fix Device Token Account Switch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-device-token:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Patch web and native token saving
+        shell: bash
+        run: |
+          set -e
+          python3 <<'PY'
+          from pathlib import Path
+
+          files = [
+              (Path("lib/services/push_service_web.dart"), "'web'"),
+              (Path("lib/services/push_service_native.dart"), "Platform.isIOS ? 'ios' : 'android'"),
+          ]
+
+          for path, platform in files:
+              text = path.read_text(encoding="utf-8")
+
+              if "'claim_device_token'" in text:
+                  print(f"{path}: bereits angepasst")
+                  continue
+
+              start = text.find("    await client.from('device_tokens').upsert(")
+              if start == -1:
+                  raise SystemExit(f"Token-Speicherblock in {path} nicht gefunden.")
+
+              end_marker = "      onConflict: 'token',\n    );"
+              end = text.find(end_marker, start)
+              if end == -1:
+                  raise SystemExit(f"Ende des Token-Speicherblocks in {path} nicht gefunden.")
+              end += len(end_marker)
+
+              replacement = (
+                  "    await client.rpc(\n"
+                  "      'claim_device_token',\n"
+                  "      params: {\n"
+                  "        'p_token': token,\n"
+                  f"        'p_platform': {platform},\n"
+                  "      },\n"
+                  "    );"
+              )
+
+              text = text[:start] + replacement + text[end:]
+              path.write_text(text, encoding="utf-8")
+              print(f"{path}: angepasst")
+          PY
+
+      - name: Format
+        run: dart format lib/services/push_service_web.dart lib/services/push_service_native.dart
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Web build test
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            lib/services/push_service_web.dart \
+            lib/services/push_service_native.dart
+
+          if git diff --cached --quiet; then
+            echo "Fix bereits vorhanden."
+            exit 0
+          fi
+
+          git commit -m "Fix push token transfer between accounts"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Device-Token-Kontowechsel repariert" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Web-Token kann sicher einem neu angemeldeten Konto zugeordnet werden" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Derselbe Fix gilt auch für Android/iOS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Flutter Analyze und Web Build erfolgreich" >> "$GITHUB_STEP_SUMMARY"
