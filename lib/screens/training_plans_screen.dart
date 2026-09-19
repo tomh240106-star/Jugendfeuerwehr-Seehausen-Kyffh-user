@@ -121,10 +121,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
     if (ok != true) return;
 
     try {
-      await _supabase
-          .from('training_plans')
-          .delete()
-          .eq('id', plan['id']);
+      await _supabase.from('training_plans').delete().eq('id', plan['id']);
 
       try {
         await _supabase.functions.invoke(
@@ -336,8 +333,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                               Navigator.of(context)
                                   .push(
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          TrainingPlanDetailsScreen(
+                                      builder: (_) => TrainingPlanDetailsScreen(
                                         plan: plan,
                                         isTrainer: _isTrainer,
                                       ),
@@ -421,8 +417,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                                   Icons.edit_outlined,
                                                   size: 18,
                                                 ),
-                                                label:
-                                                    const Text('Bearbeiten'),
+                                                label: const Text('Bearbeiten'),
                                               ),
                                               const SizedBox(width: 8),
                                               IconButton(
@@ -465,7 +460,6 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
           : null,
     );
   }
-
 }
 
 class TrainingPlanDetailsScreen extends StatefulWidget {
@@ -483,8 +477,7 @@ class TrainingPlanDetailsScreen extends StatefulWidget {
       _TrainingPlanDetailsScreenState();
 }
 
-class _TrainingPlanDetailsScreenState
-    extends State<TrainingPlanDetailsScreen> {
+class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
   final _supabase = Supabase.instance.client;
 
   bool _loading = true;
@@ -566,10 +559,7 @@ class _TrainingPlanDetailsScreenState
 
     if (ok != true) return;
 
-    await _supabase
-        .from('training_units')
-        .delete()
-        .eq('id', unit['id']);
+    await _supabase.from('training_units').delete().eq('id', unit['id']);
 
     try {
       await _supabase.functions.invoke(
@@ -580,7 +570,8 @@ class _TrainingPlanDetailsScreenState
         },
       );
     } catch (pushError) {
-      debugPrint('Ausbildungseinheit gelöscht, Push fehlgeschlagen: $pushError');
+      debugPrint(
+          'Ausbildungseinheit gelöscht, Push fehlgeschlagen: $pushError');
     }
 
     if (!mounted) return;
@@ -752,9 +743,7 @@ class _TrainingPlanDetailsScreenState
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
-                            subtitle: (unit['topic'] ?? '')
-                                    .toString()
-                                    .isEmpty
+                            subtitle: (unit['topic'] ?? '').toString().isEmpty
                                 ? null
                                 : Text(
                                     unit['topic'].toString(),
@@ -832,7 +821,6 @@ class _TrainingPlanDetailsScreenState
           : null,
     );
   }
-
 }
 
 class _TrainingPlanEditor extends StatefulWidget {
@@ -926,9 +914,8 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
 
     final data = {
       'title': _title.text.trim(),
-      'description': _description.text.trim().isEmpty
-          ? null
-          : _description.text.trim(),
+      'description':
+          _description.text.trim().isEmpty ? null : _description.text.trim(),
       'valid_from': _validFrom == null ? null : _isoDate(_validFrom),
       'valid_until': _validUntil == null ? null : _isoDate(_validUntil),
     };
@@ -949,7 +936,8 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
             },
           );
         } catch (pushError) {
-          debugPrint('Ausbildungsplan gespeichert, Push fehlgeschlagen: $pushError');
+          debugPrint(
+              'Ausbildungsplan gespeichert, Push fehlgeschlagen: $pushError');
         }
       } else {
         await _supabase
@@ -966,7 +954,8 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
             },
           );
         } catch (pushError) {
-          debugPrint('Ausbildungsplan geändert, Push fehlgeschlagen: $pushError');
+          debugPrint(
+              'Ausbildungsplan geändert, Push fehlgeschlagen: $pushError');
         }
       }
 
@@ -1019,10 +1008,9 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
                   labelText: 'Titel *',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty
-                        ? 'Bitte einen Titel eingeben.'
-                        : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Bitte einen Titel eingeben.'
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -1185,7 +1173,8 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
             },
           );
         } catch (pushError) {
-          debugPrint('Ausbildungseinheit gespeichert, Push fehlgeschlagen: $pushError');
+          debugPrint(
+              'Ausbildungseinheit gespeichert, Push fehlgeschlagen: $pushError');
         }
       } else {
         await _supabase
@@ -1202,7 +1191,8 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
             },
           );
         } catch (pushError) {
-          debugPrint('Ausbildungseinheit geändert, Push fehlgeschlagen: $pushError');
+          debugPrint(
+              'Ausbildungseinheit geändert, Push fehlgeschlagen: $pushError');
         }
       }
 
@@ -1260,10 +1250,9 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
                   labelText: 'Titel *',
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) =>
-                    value == null || value.trim().isEmpty
-                        ? 'Bitte einen Titel eingeben.'
-                        : null,
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Bitte einen Titel eingeben.'
+                    : null,
               ),
               const SizedBox(height: 12),
               TextFormField(

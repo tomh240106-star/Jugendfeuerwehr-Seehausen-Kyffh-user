@@ -42,7 +42,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   Future<void> _loadReadDocuments() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = _supabase.auth.currentUser?.id ?? 'unknown';
-    final ids = prefs.getStringList('read_documents_$userId') ?? const <String>[];
+    final ids =
+        prefs.getStringList('read_documents_$userId') ?? const <String>[];
 
     if (!mounted) return;
 
@@ -179,9 +180,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         throw Exception('Kein Speicherpfad vorhanden.');
       }
 
-      final signedUrl = await _supabase.storage
-          .from('documents')
-          .createSignedUrl(path, 60);
+      final signedUrl =
+          await _supabase.storage.from('documents').createSignedUrl(path, 60);
 
       final uri = Uri.parse(signedUrl);
 
@@ -324,9 +324,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     } catch (e) {
       if (uploadedPath != null) {
         try {
-          await _supabase.storage
-              .from('documents')
-              .remove([uploadedPath]);
+          await _supabase.storage.from('documents').remove([uploadedPath]);
         } catch (_) {}
       }
 
@@ -373,17 +371,15 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
         await _supabase.storage.from('documents').remove([path]);
       }
 
-      await _supabase
-          .from('documents')
-          .delete()
-          .eq('id', document['id']);
+      await _supabase.from('documents').delete().eq('id', document['id']);
 
       try {
         await _supabase.functions.invoke(
           'send-push',
           body: {
             'title': 'Dokument entfernt',
-            'body': '${document['title'] ?? document['file_name'] ?? 'Dokument'} wurde gelöscht.',
+            'body':
+                '${document['title'] ?? document['file_name'] ?? 'Dokument'} wurde gelöscht.',
           },
         );
       } catch (pushError) {
@@ -405,7 +401,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       );
     }
   }
-
 
   List<Map<String, dynamic>> get _filteredDocuments {
     final query = _searchQuery.trim().toLowerCase();
@@ -581,7 +576,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 4),
               child: Column(
@@ -623,7 +617,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 100),
               child: _documents.isEmpty
@@ -693,178 +686,183 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                           ),
                         )
                       : Column(
-                      children: _filteredDocuments.map((document) {
-                        final title =
-                            document['title']?.toString() ?? 'Dokument';
-                        final fileName =
-                            document['file_name']?.toString() ?? 'Datei';
-                        final category =
-                            document['category']?.toString() ?? 'Allgemein';
-                        final isNew = !_readDocumentIds.contains(
-                          document['id']?.toString() ?? '',
-                        );
+                          children: _filteredDocuments.map((document) {
+                            final title =
+                                document['title']?.toString() ?? 'Dokument';
+                            final fileName =
+                                document['file_name']?.toString() ?? 'Datei';
+                            final category =
+                                document['category']?.toString() ?? 'Allgemein';
+                            final isNew = !_readDocumentIds.contains(
+                              document['id']?.toString() ?? '',
+                            );
 
-                        final lower = fileName.toLowerCase();
-                        Color accent = blue;
-                        if (lower.endsWith('.pdf')) {
-                          accent = red;
-                        } else if (lower.endsWith('.jpg') ||
-                            lower.endsWith('.jpeg') ||
-                            lower.endsWith('.png') ||
-                            lower.endsWith('.webp')) {
-                          accent = green;
-                        }
+                            final lower = fileName.toLowerCase();
+                            Color accent = blue;
+                            if (lower.endsWith('.pdf')) {
+                              accent = red;
+                            } else if (lower.endsWith('.jpg') ||
+                                lower.endsWith('.jpeg') ||
+                                lower.endsWith('.png') ||
+                                lower.endsWith('.webp')) {
+                              accent = green;
+                            }
 
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: const Color(0xFFE3E8EE),
-                            ),
-                            boxShadow: const [
-                              BoxShadow(
-                                blurRadius: 12,
-                                offset: Offset(0, 4),
-                                color: Color(0x0D000000),
-                              ),
-                            ],
-                          ),
-                          child: InkWell(
-                            onTap: () => _openDocument(document),
-                            borderRadius: BorderRadius.circular(20),
-                            child: Padding(
-                              padding: const EdgeInsets.all(14),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: accent.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: Icon(
-                                      _iconForFile(fileName),
-                                      color: accent,
-                                      size: 29,
-                                    ),
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xFFE3E8EE),
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    blurRadius: 12,
+                                    offset: Offset(0, 4),
+                                    color: Color(0x0D000000),
                                   ),
-                                  const SizedBox(width: 13),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                title,
-                                                style: const TextStyle(
-                                                  color: navy,
-                                                  fontSize: 17,
-                                                  fontWeight: FontWeight.w800,
-                                                ),
-                                              ),
-                                            ),
-                                            if (isNew)
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: red,
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
-                                                ),
-                                                child: const Text(
-                                                  'NEU',
-                                                  style: TextStyle(
-                                                    color: Colors.white,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                              ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          category,
-                                          style: TextStyle(
-                                            color: accent,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          fileName,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: const TextStyle(
-                                            color: Color(0xFF667085),
-                                          ),
-                                        ),
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          _formatDate(
-                                            document['created_at'],
-                                          ),
-                                          style: const TextStyle(
-                                            color: Color(0xFF98A2B3),
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  _isTrainer
-                                      ? PopupMenuButton<String>(
-                                          onSelected: (value) {
-                                            if (value == 'open') {
-                                              _openDocument(document);
-                                            } else if (value == 'delete') {
-                                              _deleteDocument(document);
-                                            }
-                                          },
-                                          itemBuilder: (_) => const [
-                                            PopupMenuItem(
-                                              value: 'open',
-                                              child: ListTile(
-                                                leading:
-                                                    Icon(Icons.open_in_new),
-                                                title: Text('Öffnen'),
-                                              ),
-                                            ),
-                                            PopupMenuItem(
-                                              value: 'delete',
-                                              child: ListTile(
-                                                leading: Icon(
-                                                  Icons.delete_outline,
-                                                ),
-                                                title: Text('Löschen'),
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      : const Icon(
-                                          Icons.chevron_right,
-                                          color: Color(0xFF7E8996),
-                                        ),
                                 ],
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                              child: InkWell(
+                                onTap: () => _openDocument(document),
+                                borderRadius: BorderRadius.circular(20),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 54,
+                                        height: 54,
+                                        decoration: BoxDecoration(
+                                          color: accent.withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                        child: Icon(
+                                          _iconForFile(fileName),
+                                          color: accent,
+                                          size: 29,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 13),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    title,
+                                                    style: const TextStyle(
+                                                      color: navy,
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (isNew)
+                                                  Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: red,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: const Text(
+                                                      'NEU',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              category,
+                                              style: TextStyle(
+                                                color: accent,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              fileName,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: Color(0xFF667085),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 5),
+                                            Text(
+                                              _formatDate(
+                                                document['created_at'],
+                                              ),
+                                              style: const TextStyle(
+                                                color: Color(0xFF98A2B3),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      _isTrainer
+                                          ? PopupMenuButton<String>(
+                                              onSelected: (value) {
+                                                if (value == 'open') {
+                                                  _openDocument(document);
+                                                } else if (value == 'delete') {
+                                                  _deleteDocument(document);
+                                                }
+                                              },
+                                              itemBuilder: (_) => const [
+                                                PopupMenuItem(
+                                                  value: 'open',
+                                                  child: ListTile(
+                                                    leading:
+                                                        Icon(Icons.open_in_new),
+                                                    title: Text('Öffnen'),
+                                                  ),
+                                                ),
+                                                PopupMenuItem(
+                                                  value: 'delete',
+                                                  child: ListTile(
+                                                    leading: Icon(
+                                                      Icons.delete_outline,
+                                                    ),
+                                                    title: Text('Löschen'),
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          : const Icon(
+                                              Icons.chevron_right,
+                                              color: Color(0xFF7E8996),
+                                            ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
             ),
           ],
         ),
@@ -888,7 +886,6 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
           : null,
     );
   }
-
 }
 
 class _DocumentMeta {
@@ -993,7 +990,7 @@ class _DocumentMetaSheetState extends State<_DocumentMetaSheet> {
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _category,
+              initialValue: _category,
               decoration: const InputDecoration(
                 labelText: 'Kategorie',
                 border: OutlineInputBorder(),

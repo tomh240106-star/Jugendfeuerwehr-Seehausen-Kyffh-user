@@ -126,9 +126,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
           .order('created_at', ascending: false)
           .limit(1);
 
-      final active = rows.isEmpty
-          ? null
-          : Map<String, dynamic>.from(rows.first);
+      final active =
+          rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
 
       if (!mounted) return;
       setState(() => _activeAlarm = active);
@@ -200,6 +199,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
         .inFilter('role', ['jugendmitglied', 'ausbilder'])
         .neq('id', currentUser.id)
         .order('last_name');
+
+    if (!mounted) return;
 
     final eligible = List<Map<String, dynamic>>.from(eligibleRows);
     final selectedIds = eligible
@@ -491,6 +492,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
       setState(() => _activeAlarm = createdAlarm);
       await _loadResponses();
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -501,10 +504,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
     } catch (e) {
       if (createdAlarm != null) {
         try {
-          await _supabase
-              .from('alarms')
-              .delete()
-              .eq('id', createdAlarm['id']);
+          await _supabase.from('alarms').delete().eq('id', createdAlarm['id']);
         } catch (_) {}
       }
 
@@ -594,13 +594,10 @@ class _AlarmScreenState extends State<AlarmScreen> {
     try {
       final alarmId = _activeAlarm!['id'].toString();
 
-      await _supabase
-          .from('alarms')
-          .update({
-            'is_active': false,
-            'ended_at': DateTime.now().toUtc().toIso8601String(),
-          })
-          .eq('id', alarmId);
+      await _supabase.from('alarms').update({
+        'is_active': false,
+        'ended_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', alarmId);
 
       try {
         await _supabase.functions.invoke(
@@ -696,7 +693,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
         '${dt.hour.toString().padLeft(2, '0')}:'
         '${dt.minute.toString().padLeft(2, '0')} Uhr';
   }
-
 
   Future<void> _testNativeAlarmTone() async {
     try {
@@ -957,22 +953,22 @@ class _AlarmScreenState extends State<AlarmScreen> {
                     ),
                     const SizedBox(height: 10),
                     ..._history.take(5).map(
-                      (alarm) => Card(
-                        child: ListTile(
-                          leading: const Icon(
-                            Icons.history,
-                            color: _red,
-                          ),
-                          title: Text(
-                            alarm['title']?.toString() ?? 'Alarm',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w700,
+                          (alarm) => Card(
+                            child: ListTile(
+                              leading: const Icon(
+                                Icons.history,
+                                color: _red,
+                              ),
+                              title: Text(
+                                alarm['title']?.toString() ?? 'Alarm',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              subtitle: Text(_formatDate(alarm['created_at'])),
                             ),
                           ),
-                          subtitle: Text(_formatDate(alarm['created_at'])),
                         ),
-                      ),
-                    ),
                   ],
                 ],
               ),
@@ -1195,7 +1191,12 @@ class _YouthResponsePanel extends StatelessWidget {
       ('in_5_min', 'Bin in 5 Min. da', Icons.directions_run, Color(0xFF0B4EA2)),
       ('in_10_min', 'Bin in 10 Min. da', Icons.schedule, Color(0xFFFF8A00)),
       ('spaeter', 'Bin später da', Icons.more_time, Color(0xFF7C3AED)),
-      ('an_wache', 'Bin an der Wache', Icons.home_work_outlined, Color(0xFF16A34A)),
+      (
+        'an_wache',
+        'Bin an der Wache',
+        Icons.home_work_outlined,
+        Color(0xFF16A34A)
+      ),
       ('kann_nicht', 'Kann nicht kommen', Icons.close, Color(0xFFE30613)),
     ];
 
@@ -1235,9 +1236,7 @@ class _YouthResponsePanel extends StatelessWidget {
               child: SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: sending
-                      ? null
-                      : () => onRespond(option.$1),
+                  onPressed: sending ? null : () => onRespond(option.$1),
                   style: FilledButton.styleFrom(
                     backgroundColor: option.$4,
                     foregroundColor: Colors.white,
@@ -1321,41 +1320,53 @@ class _TrainerOverview extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _CountChip(label: '5 Min.', count: count5, color: Color(0xFF0B4EA2)),
-                  _CountChip(label: '10 Min.', count: count10, color: Color(0xFFFF8A00)),
-                  _CountChip(label: 'Später', count: countLater, color: Color(0xFF7C3AED)),
-                  _CountChip(label: 'Wache', count: countStation, color: Color(0xFF16A34A)),
+                  _CountChip(
+                      label: '5 Min.', count: count5, color: Color(0xFF0B4EA2)),
+                  _CountChip(
+                      label: '10 Min.',
+                      count: count10,
+                      color: Color(0xFFFF8A00)),
+                  _CountChip(
+                      label: 'Später',
+                      count: countLater,
+                      color: Color(0xFF7C3AED)),
+                  _CountChip(
+                      label: 'Wache',
+                      count: countStation,
+                      color: Color(0xFF16A34A)),
                   _CountChip(label: 'Kann nicht', count: countNo, color: red),
-                  _CountChip(label: 'Offen', count: open, color: Color(0xFF98A2B3)),
+                  _CountChip(
+                      label: 'Offen', count: open, color: Color(0xFF98A2B3)),
                 ],
               ),
               const SizedBox(height: 18),
               ...([...profiles]..sort((a, b) {
-                int priority(Map<String, dynamic> p) {
-                  final value =
-                      responseForUser(p['id'].toString())?['response']?.toString();
-                  switch (value) {
-                    case 'an_wache':
-                      return 0;
-                    case 'in_5_min':
-                      return 1;
-                    case 'in_10_min':
-                      return 2;
-                    case 'spaeter':
-                      return 3;
-                    case 'kann_nicht':
-                      return 4;
-                    default:
-                      return 5;
-                  }
-                }
+                      int priority(Map<String, dynamic> p) {
+                        final value =
+                            responseForUser(p['id'].toString())?['response']
+                                ?.toString();
+                        switch (value) {
+                          case 'an_wache':
+                            return 0;
+                          case 'in_5_min':
+                            return 1;
+                          case 'in_10_min':
+                            return 2;
+                          case 'spaeter':
+                            return 3;
+                          case 'kann_nicht':
+                            return 4;
+                          default:
+                            return 5;
+                        }
+                      }
 
-                final byStatus = priority(a).compareTo(priority(b));
-                if (byStatus != 0) return byStatus;
-                return personName(a).compareTo(personName(b));
-              })).map((profile) {
-                final response =
-                    responseForUser(profile['id'].toString());
+                      final byStatus = priority(a).compareTo(priority(b));
+                      if (byStatus != 0) return byStatus;
+                      return personName(a).compareTo(personName(b));
+                    }))
+                  .map((profile) {
+                final response = responseForUser(profile['id'].toString());
                 final value = response?['response']?.toString();
                 final color = responseColor(value);
 

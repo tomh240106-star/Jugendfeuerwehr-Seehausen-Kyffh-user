@@ -106,7 +106,9 @@ class _MembersScreenState extends State<MembersScreen> {
           .whereType<Map<String, dynamic>>()
           .map(_name)
           .toList();
-      return names.isEmpty ? 'Keine Kinder verknüpft' : 'Kinder: ${names.join(', ')}';
+      return names.isEmpty
+          ? 'Keine Kinder verknüpft'
+          : 'Kinder: ${names.join(', ')}';
     }
 
     if (role == 'jugendmitglied') {
@@ -116,7 +118,9 @@ class _MembersScreenState extends State<MembersScreen> {
           .whereType<Map<String, dynamic>>()
           .map(_name)
           .toList();
-      return names.isEmpty ? 'Keine Eltern verknüpft' : 'Eltern: ${names.join(', ')}';
+      return names.isEmpty
+          ? 'Keine Eltern verknüpft'
+          : 'Eltern: ${names.join(', ')}';
     }
 
     return '';
@@ -147,7 +151,6 @@ class _MembersScreenState extends State<MembersScreen> {
     );
     if (changed == true) await _load();
   }
-
 
   List<Map<String, dynamic>> get _filteredProfiles {
     final query = _searchQuery.trim().toLowerCase();
@@ -299,7 +302,8 @@ class _MembersScreenState extends State<MembersScreen> {
                         ChoiceChip(
                           label: const Text('Alle'),
                           selected: _roleFilter == 'alle',
-                          onSelected: (_) => setState(() => _roleFilter = 'alle'),
+                          onSelected: (_) =>
+                              setState(() => _roleFilter = 'alle'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
@@ -319,7 +323,8 @@ class _MembersScreenState extends State<MembersScreen> {
                         ChoiceChip(
                           label: const Text('Eltern'),
                           selected: _roleFilter == 'eltern',
-                          onSelected: (_) => setState(() => _roleFilter = 'eltern'),
+                          onSelected: (_) =>
+                              setState(() => _roleFilter = 'eltern'),
                         ),
                       ],
                     ),
@@ -362,128 +367,129 @@ class _MembersScreenState extends State<MembersScreen> {
                       ),
                     )
                   : Column(
-                children: _filteredProfiles.map((p) {
-                  final relation = _relationsText(p);
-                  final role = p['role']?.toString();
+                      children: _filteredProfiles.map((p) {
+                        final relation = _relationsText(p);
+                        final role = p['role']?.toString();
 
-                  Color accent;
-                  IconData icon;
+                        Color accent;
+                        IconData icon;
 
-                  if (role == 'ausbilder') {
-                    accent = red;
-                    icon = Icons.local_fire_department;
-                  } else if (role == 'eltern') {
-                    accent = blue;
-                    icon = Icons.family_restroom;
-                  } else {
-                    accent = green;
-                    icon = Icons.person;
-                  }
+                        if (role == 'ausbilder') {
+                          accent = red;
+                          icon = Icons.local_fire_department;
+                        } else if (role == 'eltern') {
+                          accent = blue;
+                          icon = Icons.family_restroom;
+                        } else {
+                          accent = green;
+                          icon = Icons.person;
+                        }
 
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFFE3E8EE),
-                      ),
-                      boxShadow: const [
-                        BoxShadow(
-                          blurRadius: 12,
-                          offset: Offset(0, 4),
-                          color: Color(0x0D000000),
-                        ),
-                      ],
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => _editProfile(p),
-                      child: Padding(
-                        padding: const EdgeInsets.all(15),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              width: 54,
-                              height: 54,
-                              decoration: BoxDecoration(
-                                color: accent.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Icon(
-                                icon,
-                                color: accent,
-                                size: 29,
-                              ),
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: const Color(0xFFE3E8EE),
                             ),
-                            const SizedBox(width: 13),
-                            Expanded(
-                              child: Column(
+                            boxShadow: const [
+                              BoxShadow(
+                                blurRadius: 12,
+                                offset: Offset(0, 4),
+                                color: Color(0x0D000000),
+                              ),
+                            ],
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () => _editProfile(p),
+                            child: Padding(
+                              padding: const EdgeInsets.all(15),
+                              child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    _name(p),
-                                    style: const TextStyle(
-                                      color: navy,
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w800,
+                                  Container(
+                                    width: 54,
+                                    height: 54,
+                                    decoration: BoxDecoration(
+                                      color: accent.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    _roleLabel(role),
-                                    style: TextStyle(
+                                    child: Icon(
+                                      icon,
                                       color: accent,
-                                      fontWeight: FontWeight.w700,
+                                      size: 29,
                                     ),
                                   ),
-                                  if ((p['phone'] ?? '')
-                                      .toString()
-                                      .trim()
-                                      .isNotEmpty) ...[
-                                    const SizedBox(height: 7),
-                                    Row(
+                                  const SizedBox(width: 13),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Icon(
-                                          Icons.phone_outlined,
-                                          size: 17,
-                                          color: Color(0xFF98A2B3),
-                                        ),
-                                        const SizedBox(width: 6),
                                         Text(
-                                          p['phone'].toString(),
+                                          _name(p),
                                           style: const TextStyle(
-                                            color: Color(0xFF667085),
+                                            color: navy,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
                                           ),
                                         ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          _roleLabel(role),
+                                          style: TextStyle(
+                                            color: accent,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if ((p['phone'] ?? '')
+                                            .toString()
+                                            .trim()
+                                            .isNotEmpty) ...[
+                                          const SizedBox(height: 7),
+                                          Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.phone_outlined,
+                                                size: 17,
+                                                color: Color(0xFF98A2B3),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                p['phone'].toString(),
+                                                style: const TextStyle(
+                                                  color: Color(0xFF667085),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                        if (relation.isNotEmpty) ...[
+                                          const SizedBox(height: 7),
+                                          Text(
+                                            relation,
+                                            style: const TextStyle(
+                                              color: Color(0xFF667085),
+                                              height: 1.3,
+                                            ),
+                                          ),
+                                        ],
                                       ],
                                     ),
-                                  ],
-                                  if (relation.isNotEmpty) ...[
-                                    const SizedBox(height: 7),
-                                    Text(
-                                      relation,
-                                      style: const TextStyle(
-                                        color: Color(0xFF667085),
-                                        height: 1.3,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
+                                  const Icon(
+                                    Icons.chevron_right,
+                                    color: Color(0xFF98A2B3),
+                                  ),
                                 ],
                               ),
                             ),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: Color(0xFF98A2B3),
-                            ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  );
-                }).toList(),
-              ),
             ),
           ],
         ),
@@ -498,7 +504,6 @@ class _MembersScreenState extends State<MembersScreen> {
           : null,
     );
   }
-
 }
 
 class _ProfileEditor extends StatefulWidget {
@@ -526,9 +531,12 @@ class _ProfileEditorState extends State<_ProfileEditor> {
   @override
   void initState() {
     super.initState();
-    _firstName = TextEditingController(text: widget.profile['first_name']?.toString() ?? '');
-    _lastName = TextEditingController(text: widget.profile['last_name']?.toString() ?? '');
-    _phone = TextEditingController(text: widget.profile['phone']?.toString() ?? '');
+    _firstName = TextEditingController(
+        text: widget.profile['first_name']?.toString() ?? '');
+    _lastName = TextEditingController(
+        text: widget.profile['last_name']?.toString() ?? '');
+    _phone =
+        TextEditingController(text: widget.profile['phone']?.toString() ?? '');
     _role = widget.profile['role']?.toString() ?? 'jugendmitglied';
     _notificationsEnabled = widget.profile['notifications_enabled'] == true;
   }
@@ -536,7 +544,8 @@ class _ProfileEditorState extends State<_ProfileEditor> {
   Future<void> _save() async {
     if (_firstName.text.trim().isEmpty || _lastName.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vorname und Nachname sind erforderlich.')),
+        const SnackBar(
+            content: Text('Vorname und Nachname sind erforderlich.')),
       );
       return;
     }
@@ -641,13 +650,14 @@ class _ProfileEditorState extends State<_ProfileEditor> {
             if (widget.canChangeRole) ...[
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: _role,
+                initialValue: _role,
                 decoration: const InputDecoration(
                   labelText: 'Rolle',
                   border: OutlineInputBorder(),
                 ),
                 items: const [
-                  DropdownMenuItem(value: 'ausbilder', child: Text('Ausbilder')),
+                  DropdownMenuItem(
+                      value: 'ausbilder', child: Text('Ausbilder')),
                   DropdownMenuItem(value: 'eltern', child: Text('Eltern')),
                   DropdownMenuItem(
                     value: 'jugendmitglied',
@@ -805,7 +815,7 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
             ),
             const SizedBox(height: 18),
             DropdownButtonFormField<String>(
-              value: _parentId,
+              initialValue: _parentId,
               decoration: const InputDecoration(
                 labelText: 'Elternteil',
                 border: OutlineInputBorder(),
@@ -822,7 +832,7 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _childId,
+              initialValue: _childId,
               decoration: const InputDecoration(
                 labelText: 'Jugendmitglied',
                 border: OutlineInputBorder(),
@@ -841,8 +851,9 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed:
-                    _saving || _parentId == null || _childId == null ? null : _add,
+                onPressed: _saving || _parentId == null || _childId == null
+                    ? null
+                    : _add,
                 icon: const Icon(Icons.link),
                 label: const Text('Verknüpfen'),
               ),

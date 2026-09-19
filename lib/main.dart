@@ -5,19 +5,18 @@ import 'screens/auth_screen.dart';
 import 'screens/home_shell.dart';
 import 'services/push_service.dart';
 
-const supabaseUrl =
-    String.fromEnvironment('SUPABASE_URL', defaultValue: '');
+const supabaseUrl = String.fromEnvironment('SUPABASE_URL', defaultValue: '');
 
-const supabaseAnonKey =
+const supabasePublishableKey =
     String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
+  if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
     await Supabase.initialize(
       url: supabaseUrl,
-      anonKey: supabaseAnonKey,
+      publishableKey: supabasePublishableKey,
     );
 
     await PushService.initialize();
@@ -51,7 +50,7 @@ class JfApp extends StatelessWidget {
   }
 
   Widget _entry() {
-    if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+    if (supabaseUrl.isEmpty || supabasePublishableKey.isEmpty) {
       return const AuthScreen(
         configMissing: true,
       );

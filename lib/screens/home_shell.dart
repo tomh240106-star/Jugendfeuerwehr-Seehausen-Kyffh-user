@@ -21,12 +21,6 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  static const _navy = Color(0xFF0A1F44);
-  static const _blue = Color(0xFF0B4EA2);
-  static const _red = Color(0xFFE30613);
-  static const _green = Color(0xFF13A05B);
-  static const _orange = Color(0xFFFF7A00);
-
   int _selectedIndex = 0;
   int _unreadMessages = 0;
   int _newDocuments = 0;
@@ -99,14 +93,13 @@ class _HomeShellState extends State<HomeShell> {
           .neq('sender_id', user.id)
           .isFilter('read_at', null);
 
-      final documentRows = await Supabase.instance.client
-          .from('documents')
-          .select('id');
+      final documentRows =
+          await Supabase.instance.client.from('documents').select('id');
 
       final prefs = await SharedPreferences.getInstance();
-      final readIds = (prefs.getStringList('read_documents_${user.id}') ??
-              const <String>[])
-          .toSet();
+      final readIds =
+          (prefs.getStringList('read_documents_${user.id}') ?? const <String>[])
+              .toSet();
 
       final newDocs = documentRows
           .where((row) => !readIds.contains(row['id']?.toString() ?? ''))
@@ -307,8 +300,7 @@ class _ModernDashboardState extends State<_ModernDashboard> {
       }
 
       final today = DateTime.now();
-      final todayText =
-          '${today.year.toString().padLeft(4, '0')}-'
+      final todayText = '${today.year.toString().padLeft(4, '0')}-'
           '${today.month.toString().padLeft(2, '0')}-'
           '${today.day.toString().padLeft(2, '0')}';
 
@@ -319,11 +311,9 @@ class _ModernDashboardState extends State<_ModernDashboard> {
           .order('valid_from')
           .limit(1);
 
-      final role =
-          profile?['role']?.toString().trim().toLowerCase() ?? '';
+      final role = profile?['role']?.toString().trim().toLowerCase() ?? '';
       final isTrainer = role == 'ausbilder';
-      final canUseAlarm =
-          role == 'ausbilder' || role == 'jugendmitglied';
+      final canUseAlarm = role == 'ausbilder' || role == 'jugendmitglied';
 
       Map<String, dynamic>? activeAlarm;
       if (canUseAlarm) {
@@ -335,8 +325,7 @@ class _ModernDashboardState extends State<_ModernDashboard> {
             .limit(1);
 
         if (activeRows.isNotEmpty) {
-          activeAlarm =
-              Map<String, dynamic>.from(activeRows.first);
+          activeAlarm = Map<String, dynamic>.from(activeRows.first);
         }
       }
 
@@ -349,13 +338,11 @@ class _ModernDashboardState extends State<_ModernDashboard> {
       if (!mounted) return;
 
       setState(() {
-        _profile =
-            profile == null ? null : Map<String, dynamic>.from(profile);
+        _profile = profile == null ? null : Map<String, dynamic>.from(profile);
         _nextEvent = nextEvent;
         _attendanceStatus = attendance;
-        _trainingPlan = plans.isEmpty
-            ? null
-            : Map<String, dynamic>.from(plans.first);
+        _trainingPlan =
+            plans.isEmpty ? null : Map<String, dynamic>.from(plans.first);
         _activeAlarm = activeAlarm;
         _isTrainer = isTrainer;
         _memberCount = memberCount;
@@ -500,8 +487,8 @@ class _ModernDashboardState extends State<_ModernDashboard> {
                         background: _orange,
                         icon: Icons.menu_book_outlined,
                         value: 'Plan',
-                        label: _trainingPlan?['title']?.toString() ??
-                            'Ausbildung',
+                        label:
+                            _trainingPlan?['title']?.toString() ?? 'Ausbildung',
                         onTap: widget.onOpenAusbildung,
                       ),
                     ),
@@ -531,8 +518,7 @@ class _ModernDashboardState extends State<_ModernDashboard> {
                 _SectionCard(
                   icon: Icons.local_fire_department,
                   title: 'Gemeinsam. Stark. Für morgen.',
-                  subtitle:
-                      'Jugendfeuerwehr Seehausen/Kyffhäuser',
+                  subtitle: 'Jugendfeuerwehr Seehausen/Kyffhäuser',
                 ),
               ],
             ),
@@ -896,7 +882,6 @@ class _SectionCard extends StatelessWidget {
   }
 }
 
-
 class _MoreScreen extends StatefulWidget {
   const _MoreScreen();
 
@@ -936,9 +921,7 @@ class _MoreScreenState extends State<_MoreScreen> {
       if (!mounted) return;
 
       setState(() {
-        _profile = profile == null
-            ? null
-            : Map<String, dynamic>.from(profile);
+        _profile = profile == null ? null : Map<String, dynamic>.from(profile);
         _loading = false;
       });
     } catch (_) {
@@ -1049,7 +1032,6 @@ class _MoreScreenState extends State<_MoreScreen> {
               ),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
             child: Column(
@@ -1121,9 +1103,7 @@ class _MoreScreenState extends State<_MoreScreen> {
                           ],
                         ),
                 ),
-
                 const SizedBox(height: 18),
-
                 _MoreSection(
                   title: 'Verwaltung',
                   children: [
@@ -1213,9 +1193,7 @@ class _MoreScreenState extends State<_MoreScreen> {
                       ),
                   ],
                 ),
-
                 const SizedBox(height: 18),
-
                 _MoreSection(
                   title: 'Informationen',
                   children: [
@@ -1282,9 +1260,7 @@ class _MoreScreenState extends State<_MoreScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 18),
-
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -1488,8 +1464,7 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
 
     setState(() {
       _role = profile?['role']?.toString() ?? '';
-      _notificationsEnabled =
-          profile?['notifications_enabled'] != false;
+      _notificationsEnabled = profile?['notifications_enabled'] != false;
       _loading = false;
     });
   }
@@ -1511,8 +1486,7 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
     final user = _supabase.auth.currentUser;
     if (user == null || _saving) return;
 
-    if (_firstName.text.trim().isEmpty ||
-        _lastName.text.trim().isEmpty) {
+    if (_firstName.text.trim().isEmpty || _lastName.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -1526,17 +1500,12 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
     setState(() => _saving = true);
 
     try {
-      await _supabase
-          .from('profiles')
-          .update({
-            'first_name': _firstName.text.trim(),
-            'last_name': _lastName.text.trim(),
-            'phone': _phone.text.trim().isEmpty
-                ? null
-                : _phone.text.trim(),
-            'notifications_enabled': _notificationsEnabled,
-          })
-          .eq('id', user.id);
+      await _supabase.from('profiles').update({
+        'first_name': _firstName.text.trim(),
+        'last_name': _lastName.text.trim(),
+        'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+        'notifications_enabled': _notificationsEnabled,
+      }).eq('id', user.id);
 
       if (!mounted) return;
 

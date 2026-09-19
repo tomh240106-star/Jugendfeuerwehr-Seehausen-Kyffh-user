@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -297,8 +296,9 @@ class PushService {
         presentBadge: true,
         presentSound: true,
         sound: isAlarm ? 'jf_alarm.wav' : null,
-        interruptionLevel:
-            isAlarm ? InterruptionLevel.timeSensitive : InterruptionLevel.active,
+        interruptionLevel: isAlarm
+            ? InterruptionLevel.timeSensitive
+            : InterruptionLevel.active,
       ),
     );
 

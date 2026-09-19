@@ -102,7 +102,8 @@ class _AuthScreenState extends State<AuthScreen> {
     } on AuthException catch (error) {
       _setMessage(_friendlyAuthMessage(error.message));
     } catch (_) {
-      _setMessage('Anmeldung derzeit nicht möglich. Bitte später erneut versuchen.');
+      _setMessage(
+          'Anmeldung derzeit nicht möglich. Bitte später erneut versuchen.');
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -223,7 +224,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         const SizedBox(height: 6),
                         const Text('Gemeinsam. Stark. Für morgen.'),
                         const SizedBox(height: 30),
-
                         if (_registerMode) ...[
                           TextField(
                             controller: _firstNameController,
@@ -248,7 +248,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<String>(
-                            value: _registerRole,
+                            initialValue: _registerRole,
                             decoration: const InputDecoration(
                               labelText: 'Konto für',
                               prefixIcon: Icon(Icons.badge_outlined),
@@ -274,7 +274,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                           const SizedBox(height: 14),
                         ],
-
                         TextField(
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
@@ -314,7 +313,6 @@ class _AuthScreenState extends State<AuthScreen> {
                             if (!_loading) _submit();
                           },
                         ),
-
                         if (!_registerMode)
                           Align(
                             alignment: Alignment.centerRight,
@@ -325,7 +323,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           )
                         else
                           const SizedBox(height: 14),
-
                         if (_message != null) ...[
                           Container(
                             width: double.infinity,
@@ -349,7 +346,6 @@ class _AuthScreenState extends State<AuthScreen> {
                           ),
                           const SizedBox(height: 14),
                         ],
-
                         SizedBox(
                           width: double.infinity,
                           height: 52,
@@ -411,8 +407,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               child: const Text('Datenschutz'),
                             ),
                             TextButton(
-                              onPressed: () =>
-                                  _openLegal(LegalSection.kontakt),
+                              onPressed: () => _openLegal(LegalSection.kontakt),
                               child: const Text('Kontakt'),
                             ),
                           ],

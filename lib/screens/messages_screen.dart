@@ -234,7 +234,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
               child: _conversations.isEmpty
@@ -272,11 +271,13 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     )
                   : Column(
                       children: _conversations.map((conversation) {
-                        final title =
-                            conversation['title']?.toString().trim().isNotEmpty ==
-                                    true
-                                ? conversation['title'].toString()
-                                : 'Unterhaltung';
+                        final title = conversation['title']
+                                    ?.toString()
+                                    .trim()
+                                    .isNotEmpty ==
+                                true
+                            ? conversation['title'].toString()
+                            : 'Unterhaltung';
 
                         final scope = conversation['scope']?.toString();
 
@@ -379,7 +380,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
           : null,
     );
   }
-
 }
 
 class ChatScreen extends StatefulWidget {
@@ -446,7 +446,8 @@ class _ChatScreenState extends State<ChatScreen> {
         },
       );
     } catch (error) {
-      debugPrint('Nachrichten konnten nicht als gelesen markiert werden: $error');
+      debugPrint(
+          'Nachrichten konnten nicht als gelesen markiert werden: $error');
     }
   }
 
@@ -475,8 +476,7 @@ class _ChatScreenState extends State<ChatScreen> {
             .inFilter('id', senderIds);
 
         for (final p in profiles) {
-          profilesById[p['id'].toString()] =
-              Map<String, dynamic>.from(p);
+          profilesById[p['id'].toString()] = Map<String, dynamic>.from(p);
         }
       }
 
@@ -518,8 +518,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (name.isNotEmpty) return name;
 
-    if (message['sender_id']?.toString() ==
-        _supabase.auth.currentUser?.id) {
+    if (message['sender_id']?.toString() == _supabase.auth.currentUser?.id) {
       return 'Ich';
     }
 
@@ -562,9 +561,7 @@ class _ChatScreenState extends State<ChatScreen> {
             'title': conversationTitle == null || conversationTitle.isEmpty
                 ? 'Neue Nachricht'
                 : conversationTitle,
-            'body': body.length > 120
-                ? '${body.substring(0, 117)}...'
-                : body,
+            'body': body.length > 120 ? '${body.substring(0, 117)}...' : body,
             'conversation_id': widget.conversation['id'],
           },
         );
@@ -655,9 +652,8 @@ class _ChatScreenState extends State<ChatScreen> {
                               itemCount: _messages.length,
                               itemBuilder: (context, index) {
                                 final message = _messages[index];
-                                final mine =
-                                    message['sender_id']?.toString() ==
-                                        _supabase.auth.currentUser?.id;
+                                final mine = message['sender_id']?.toString() ==
+                                    _supabase.auth.currentUser?.id;
 
                                 return Align(
                                   alignment: mine
@@ -830,15 +826,13 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
-
 }
 
 class _NewConversationSheet extends StatefulWidget {
   const _NewConversationSheet();
 
   @override
-  State<_NewConversationSheet> createState() =>
-      _NewConversationSheetState();
+  State<_NewConversationSheet> createState() => _NewConversationSheetState();
 }
 
 class _NewConversationSheetState extends State<_NewConversationSheet> {
@@ -993,7 +987,8 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
       setState(() => _saving = false);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unterhaltung konnte nicht erstellt werden: $e')),
+        SnackBar(
+            content: Text('Unterhaltung konnte nicht erstellt werden: $e')),
       );
     }
   }
@@ -1035,7 +1030,7 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<String>(
-              value: _scope,
+              initialValue: _scope,
               decoration: const InputDecoration(
                 labelText: 'Empfänger',
                 border: OutlineInputBorder(),

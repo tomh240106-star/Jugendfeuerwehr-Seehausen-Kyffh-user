@@ -31,47 +31,45 @@ class _EventsScreenState extends State<EventsScreen> {
   }
 
   Future<void> _loadRole() async {
-  final user = _supabase.auth.currentUser;
+    final user = _supabase.auth.currentUser;
 
-  if (user == null) {
-    debugPrint('Kein Benutzer angemeldet');
-    return;
+    if (user == null) {
+      debugPrint('Kein Benutzer angemeldet');
+      return;
+    }
+
+    try {
+      final profile = await _supabase
+          .from('profiles')
+          .select('id, role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      debugPrint('User-ID: ${user.id}');
+      debugPrint('Profil: $profile');
+
+      if (!mounted) return;
+
+      final role = profile?['role']?.toString().trim().toLowerCase();
+
+      setState(() {
+        _role = role;
+        _isTrainer = role == 'ausbilder';
+      });
+
+      debugPrint('Rolle: $role');
+      debugPrint('Ist Ausbilder: $_isTrainer');
+    } catch (error) {
+      debugPrint('Fehler beim Laden der Rolle: $error');
+
+      if (!mounted) return;
+
+      setState(() {
+        _isTrainer = false;
+      });
+    }
   }
 
-  try {
-    final profile = await _supabase
-        .from('profiles')
-        .select('id, role')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    debugPrint('User-ID: ${user.id}');
-    debugPrint('Profil: $profile');
-
-    if (!mounted) return;
-
-    final role = profile?['role']
-        ?.toString()
-        .trim()
-        .toLowerCase();
-
-    setState(() {
-      _role = role;
-      _isTrainer = role == 'ausbilder';
-    });
-
-    debugPrint('Rolle: $role');
-    debugPrint('Ist Ausbilder: $_isTrainer');
-  } catch (error) {
-    debugPrint('Fehler beim Laden der Rolle: $error');
-
-    if (!mounted) return;
-
-    setState(() {
-      _isTrainer = false;
-    });
-  }
-}
   Future<void> _loadEvents() async {
     if (mounted) {
       setState(() {
@@ -135,19 +133,6 @@ class _EventsScreenState extends State<EventsScreen> {
       case 'offen':
       default:
         return 'Noch offen';
-    }
-  }
-
-  IconData _attendanceIcon(String? status) {
-    switch (status) {
-      case 'zugesagt':
-        return Icons.check_circle;
-      case 'abgesagt':
-        return Icons.cancel;
-      case 'entschuldigt':
-        return Icons.info;
-      default:
-        return Icons.help_outline;
     }
   }
 
@@ -247,31 +232,21 @@ class _EventsScreenState extends State<EventsScreen> {
     }
   }
 
-  IconData _typeIcon(String type) {
-    switch (type) {
-      case 'wettbewerb':
-        return Icons.emoji_events;
-
-      case 'zeltlager':
-        return Icons.cabin;
-
-      case 'elternabend':
-        return Icons.groups;
-
-      case 'veranstaltung':
-        return Icons.celebration;
-
-      default:
-        return Icons.local_fire_department;
-    }
-  }
-
-
   String _monthShort(DateTime? date) {
     if (date == null) return '';
     const months = [
-      'JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN',
-      'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ',
+      'JAN',
+      'FEB',
+      'MÄR',
+      'APR',
+      'MAI',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OKT',
+      'NOV',
+      'DEZ',
     ];
     return months[date.month - 1];
   }
@@ -356,10 +331,7 @@ class _EventsScreenState extends State<EventsScreen> {
     }
 
     try {
-      await _supabase
-          .from('events')
-          .delete()
-          .eq(
+      await _supabase.from('events').delete().eq(
             'id',
             event['id'],
           );
@@ -399,7 +371,6 @@ class _EventsScreenState extends State<EventsScreen> {
       );
     }
   }
-
 
   Future<void> _showAttendanceOverview(
     Map<String, dynamic> event,
@@ -462,7 +433,8 @@ class _EventsScreenState extends State<EventsScreen> {
                         ),
                       ]
                     : entries.map((row) {
-                        final profile = row['profiles'] as Map<String, dynamic>?;
+                        final profile =
+                            row['profiles'] as Map<String, dynamic>?;
 
                         final firstName =
                             profile?['first_name']?.toString().trim() ?? '';
@@ -633,13 +605,11 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
               const SizedBox(height: 24),
-
               _DetailRow(
                 icon: Icons.calendar_today,
                 title: 'Datum',
                 value: _date(start),
               ),
-
               _DetailRow(
                 icon: Icons.access_time,
                 title: 'Uhrzeit',
@@ -647,37 +617,25 @@ class _EventsScreenState extends State<EventsScreen> {
                     ? _time(start)
                     : '${_time(start)} - ${_time(end)}',
               ),
-
-              if ((event['location'] ?? '')
-                  .toString()
-                  .isNotEmpty)
+              if ((event['location'] ?? '').toString().isNotEmpty)
                 _DetailRow(
                   icon: Icons.location_on,
                   title: 'Ort',
                   value: event['location'].toString(),
                 ),
-
-              if ((event['meeting_point'] ?? '')
-                  .toString()
-                  .isNotEmpty)
+              if ((event['meeting_point'] ?? '').toString().isNotEmpty)
                 _DetailRow(
                   icon: Icons.groups,
                   title: 'Treffpunkt',
                   value: event['meeting_point'].toString(),
                 ),
-
-              if ((event['required_equipment'] ?? '')
-                  .toString()
-                  .isNotEmpty)
+              if ((event['required_equipment'] ?? '').toString().isNotEmpty)
                 _DetailRow(
                   icon: Icons.backpack,
                   title: 'Ausrüstung',
                   value: event['required_equipment'].toString(),
                 ),
-
-              if ((event['description'] ?? '')
-                  .toString()
-                  .isNotEmpty) ...[
+              if ((event['description'] ?? '').toString().isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text(
                   'Beschreibung',
@@ -691,7 +649,6 @@ class _EventsScreenState extends State<EventsScreen> {
                   event['description'].toString(),
                 ),
               ],
-
               if (_role != 'eltern') ...[
                 const SizedBox(height: 24),
                 const Divider(),
@@ -715,8 +672,8 @@ class _EventsScreenState extends State<EventsScreen> {
                     ChoiceChip(
                       avatar: const Icon(Icons.check_circle, size: 18),
                       label: const Text('Ich nehme teil'),
-                      selected:
-                          _attendanceByEvent[event['id']?.toString()] == 'zugesagt',
+                      selected: _attendanceByEvent[event['id']?.toString()] ==
+                          'zugesagt',
                       onSelected: (_) {
                         _setAttendance(event, 'zugesagt');
                         Navigator.pop(context);
@@ -725,8 +682,8 @@ class _EventsScreenState extends State<EventsScreen> {
                     ChoiceChip(
                       avatar: const Icon(Icons.cancel, size: 18),
                       label: const Text('Ich nehme nicht teil'),
-                      selected:
-                          _attendanceByEvent[event['id']?.toString()] == 'abgesagt',
+                      selected: _attendanceByEvent[event['id']?.toString()] ==
+                          'abgesagt',
                       onSelected: (_) {
                         _setAttendance(event, 'abgesagt');
                         Navigator.pop(context);
@@ -735,8 +692,8 @@ class _EventsScreenState extends State<EventsScreen> {
                     ChoiceChip(
                       avatar: const Icon(Icons.info_outline, size: 18),
                       label: const Text('Entschuldigt'),
-                      selected:
-                          _attendanceByEvent[event['id']?.toString()] == 'entschuldigt',
+                      selected: _attendanceByEvent[event['id']?.toString()] ==
+                          'entschuldigt',
                       onSelected: (_) {
                         _setAttendance(event, 'entschuldigt');
                         Navigator.pop(context);
@@ -745,8 +702,8 @@ class _EventsScreenState extends State<EventsScreen> {
                     ChoiceChip(
                       avatar: const Icon(Icons.help_outline, size: 18),
                       label: const Text('Noch offen'),
-                      selected:
-                          _attendanceByEvent[event['id']?.toString()] == 'offen',
+                      selected: _attendanceByEvent[event['id']?.toString()] ==
+                          'offen',
                       onSelected: (_) {
                         _setAttendance(event, 'offen');
                         Navigator.pop(context);
@@ -770,10 +727,8 @@ class _EventsScreenState extends State<EventsScreen> {
                   'Eltern können den Termin einsehen. Die Rückmeldung erfolgt über das Jugendmitglied.',
                 ),
               ],
-
               if (_isTrainer) ...[
                 const SizedBox(height: 30),
-
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -789,9 +744,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
@@ -810,9 +763,7 @@ class _EventsScreenState extends State<EventsScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 10),
-
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -970,7 +921,6 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
               child: _events.isEmpty
@@ -1012,8 +962,8 @@ class _EventsScreenState extends State<EventsScreen> {
                         final end = _parseDate(event['ends_at']);
                         final type =
                             event['event_type']?.toString() ?? 'dienst';
-                        final status = _attendanceByEvent[
-                            event['id']?.toString()];
+                        final status =
+                            _attendanceByEvent[event['id']?.toString()];
                         final statusColor = _attendanceColor(status);
 
                         return Container(
@@ -1202,7 +1152,6 @@ class _EventsScreenState extends State<EventsScreen> {
           : null,
     );
   }
-
 }
 
 class EventEditor extends StatefulWidget {
@@ -1220,8 +1169,7 @@ class EventEditor extends StatefulWidget {
 }
 
 class _EventEditorState extends State<EventEditor> {
-  final SupabaseClient _supabase =
-      Supabase.instance.client;
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   late final TextEditingController _title;
   late final TextEditingController _description;
@@ -1270,9 +1218,7 @@ class _EventEditorState extends State<EventEditor> {
     );
 
     if (event != null) {
-      _type =
-          event['event_type']?.toString() ??
-              'dienst';
+      _type = event['event_type']?.toString() ?? 'dienst';
 
       _start = DateTime.tryParse(
             event['starts_at']?.toString() ?? '',
@@ -1356,8 +1302,7 @@ class _EventEditorState extends State<EventEditor> {
       return;
     }
 
-    if (_end != null &&
-        _end!.isBefore(_start)) {
+    if (_end != null && _end!.isBefore(_start)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -1369,8 +1314,7 @@ class _EventEditorState extends State<EventEditor> {
       return;
     }
 
-    final user =
-        _supabase.auth.currentUser;
+    final user = _supabase.auth.currentUser;
 
     if (user == null) {
       return;
@@ -1383,40 +1327,27 @@ class _EventEditorState extends State<EventEditor> {
     final data = {
       'title': _title.text.trim(),
       'description':
-          _description.text.trim().isEmpty
-              ? null
-              : _description.text.trim(),
+          _description.text.trim().isEmpty ? null : _description.text.trim(),
       'event_type': _type,
       'starts_at': _start.toUtc().toIso8601String(),
       'ends_at': _end?.toUtc().toIso8601String(),
-      'location':
-          _location.text.trim().isEmpty
-              ? null
-              : _location.text.trim(),
+      'location': _location.text.trim().isEmpty ? null : _location.text.trim(),
       'meeting_point':
-          _meetingPoint.text.trim().isEmpty
-              ? null
-              : _meetingPoint.text.trim(),
+          _meetingPoint.text.trim().isEmpty ? null : _meetingPoint.text.trim(),
       'required_equipment':
-          _equipment.text.trim().isEmpty
-              ? null
-              : _equipment.text.trim(),
+          _equipment.text.trim().isEmpty ? null : _equipment.text.trim(),
     };
 
     try {
       if (_editing) {
-        await _supabase
-            .from('events')
-            .update(data)
-            .eq(
+        await _supabase.from('events').update(data).eq(
               'id',
               widget.event!['id'],
             );
 
         try {
           final startLocal = _start.toLocal();
-          final dateText =
-              '${startLocal.day.toString().padLeft(2, '0')}.'
+          final dateText = '${startLocal.day.toString().padLeft(2, '0')}.'
               '${startLocal.month.toString().padLeft(2, '0')}.'
               '${startLocal.year} um '
               '${startLocal.hour.toString().padLeft(2, '0')}:'
@@ -1435,17 +1366,14 @@ class _EventEditorState extends State<EventEditor> {
           );
         }
       } else {
-        await _supabase
-            .from('events')
-            .insert({
+        await _supabase.from('events').insert({
           ...data,
           'created_by': user.id,
         });
 
         try {
           final startLocal = _start.toLocal();
-          final dateText =
-              '${startLocal.day.toString().padLeft(2, '0')}.'
+          final dateText = '${startLocal.day.toString().padLeft(2, '0')}.'
               '${startLocal.month.toString().padLeft(2, '0')}.'
               '${startLocal.year} um '
               '${startLocal.hour.toString().padLeft(2, '0')}:'
@@ -1497,21 +1425,16 @@ class _EventEditorState extends State<EventEditor> {
       ),
       child: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment:
-              CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _editing
-                  ? 'Termin bearbeiten'
-                  : 'Neuen Termin erstellen',
+              _editing ? 'Termin bearbeiten' : 'Neuen Termin erstellen',
               style: const TextStyle(
                 fontSize: 25,
                 fontWeight: FontWeight.bold,
               ),
             ),
-
             const SizedBox(height: 22),
-
             TextField(
               controller: _title,
               decoration: const InputDecoration(
@@ -1519,11 +1442,9 @@ class _EventEditorState extends State<EventEditor> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 14),
-
             DropdownButtonFormField<String>(
-              value: _type,
+              initialValue: _type,
               decoration: const InputDecoration(
                 labelText: 'Art des Termins',
                 border: OutlineInputBorder(),
@@ -1562,9 +1483,7 @@ class _EventEditorState extends State<EventEditor> {
                 }
               },
             ),
-
             const SizedBox(height: 14),
-
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(
@@ -1580,8 +1499,7 @@ class _EventEditorState extends State<EventEditor> {
                 Icons.edit,
               ),
               onTap: () async {
-                final selected =
-                    await _selectDateTime(
+                final selected = await _selectDateTime(
                   _start,
                 );
 
@@ -1592,7 +1510,6 @@ class _EventEditorState extends State<EventEditor> {
                 }
               },
             ),
-
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(
@@ -1602,9 +1519,7 @@ class _EventEditorState extends State<EventEditor> {
                 'Ende',
               ),
               subtitle: Text(
-                _end == null
-                    ? 'Nicht angegeben'
-                    : _formatDateTime(_end!),
+                _end == null ? 'Nicht angegeben' : _formatDateTime(_end!),
               ),
               trailing: _end == null
                   ? const Icon(Icons.add)
@@ -1619,8 +1534,7 @@ class _EventEditorState extends State<EventEditor> {
                       },
                     ),
               onTap: () async {
-                final selected =
-                    await _selectDateTime(
+                final selected = await _selectDateTime(
                   _end ??
                       _start.add(
                         const Duration(hours: 2),
@@ -1634,9 +1548,7 @@ class _EventEditorState extends State<EventEditor> {
                 }
               },
             ),
-
             const SizedBox(height: 10),
-
             TextField(
               controller: _location,
               decoration: const InputDecoration(
@@ -1647,9 +1559,7 @@ class _EventEditorState extends State<EventEditor> {
                 ),
               ),
             ),
-
             const SizedBox(height: 14),
-
             TextField(
               controller: _meetingPoint,
               decoration: const InputDecoration(
@@ -1660,9 +1570,7 @@ class _EventEditorState extends State<EventEditor> {
                 ),
               ),
             ),
-
             const SizedBox(height: 14),
-
             TextField(
               controller: _equipment,
               decoration: const InputDecoration(
@@ -1673,9 +1581,7 @@ class _EventEditorState extends State<EventEditor> {
                 ),
               ),
             ),
-
             const SizedBox(height: 14),
-
             TextField(
               controller: _description,
               maxLines: 4,
@@ -1684,29 +1590,23 @@ class _EventEditorState extends State<EventEditor> {
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 24),
-
             SizedBox(
               width: double.infinity,
               height: 52,
               child: FilledButton.icon(
-                onPressed:
-                    _saving ? null : _save,
+                onPressed: _saving ? null : _save,
                 icon: _saving
                     ? const SizedBox(
                         width: 20,
                         height: 20,
-                        child:
-                            CircularProgressIndicator(),
+                        child: CircularProgressIndicator(),
                       )
                     : const Icon(
                         Icons.save,
                       ),
                 label: Text(
-                  _editing
-                      ? 'Änderungen speichern'
-                      : 'Termin erstellen',
+                  _editing ? 'Änderungen speichern' : 'Termin erstellen',
                 ),
               ),
             ),
@@ -1716,7 +1616,6 @@ class _EventEditorState extends State<EventEditor> {
     );
   }
 }
-
 
 class _StatCard extends StatelessWidget {
   final IconData icon;
@@ -1782,8 +1681,7 @@ class _DetailRow extends StatelessWidget {
         bottom: 15,
       ),
       child: Row(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(
             icon,
@@ -1792,14 +1690,12 @@ class _DetailRow extends StatelessWidget {
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 3),
