@@ -114,20 +114,34 @@ class _AuthScreenState extends State<AuthScreen> {
   String _friendlyAuthMessage(String message) {
     final lower = message.toLowerCase();
 
-    if (lower.contains('invalid login credentials')) {
+    if (lower.contains('invalid login credentials') ||
+        lower.contains('invalid credentials') ||
+        lower.contains('email or password')) {
       return 'E-Mail-Adresse oder Passwort ist falsch.';
     }
+
     if (lower.contains('email not confirmed')) {
       return 'Bitte bestätige zuerst deine E-Mail-Adresse.';
     }
+
     if (lower.contains('user already registered')) {
       return 'Für diese E-Mail-Adresse besteht bereits ein Konto.';
     }
-    if (lower.contains('password')) {
+
+    if (_registerMode &&
+        (lower.contains('password') ||
+            lower.contains('weak') ||
+            lower.contains('characters'))) {
       return 'Das Passwort erfüllt die Anforderungen nicht.';
     }
 
-    return message;
+    if (lower.contains('network') ||
+        lower.contains('socket') ||
+        lower.contains('connection')) {
+      return 'Verbindung zum Server fehlgeschlagen. Bitte Internetverbindung prüfen und erneut versuchen.';
+    }
+
+    return 'Anmeldung fehlgeschlagen: $message';
   }
 
   Future<void> _resetPassword() async {
