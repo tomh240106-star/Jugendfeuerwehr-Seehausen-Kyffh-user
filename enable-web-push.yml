@@ -1,0 +1,413 @@
+name: Enable Web Push
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  enable-web-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Write web push service
+        run: |
+          cat > lib/services/push_service_web.dart <<'DART'
+          import 'dart:async';
+          import 'dart:js_interop';
+
+          import 'package:supabase_flutter/supabase_flutter.dart';
+
+          @JS('jfWebPushRequestToken')
+          external JSPromise<JSString> _requestWebPushToken();
+
+          @JS('jfWebPushGetToken')
+          external JSPromise<JSString> _getWebPushToken();
+
+          class PushService {
+            PushService._();
+
+            static final StreamController<String> _openController =
+                StreamController<String>.broadcast();
+
+            static Stream<String> get openEvents => _openController.stream;
+
+            static String? consumePendingDestination() => null;
+
+            static bool _initialized = false;
+
+            static Future<void> initialize() async {
+              if (_initialized) return;
+              _initialized = true;
+
+              Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
+                if (data.session != null) {
+                  await syncToken();
+                }
+              });
+
+              if (Supabase.instance.client.auth.currentSession != null) {
+                await syncToken();
+              }
+            }
+
+            static Future<bool> requestPermissionAndSync() async {
+              try {
+                final token = (await _requestWebPushToken().toDart).toDart.trim();
+                if (token.isEmpty) return false;
+
+                await _saveToken(token);
+                return true;
+              } catch (_) {
+                return false;
+              }
+            }
+
+            static Future<void> syncToken() async {
+              try {
+                final token = (await _getWebPushToken().toDart).toDart.trim();
+                if (token.isEmpty) return;
+
+                await _saveToken(token);
+              } catch (_) {}
+            }
+
+            static Future<void> _saveToken(String token) async {
+              final client = Supabase.instance.client;
+              final user = client.auth.currentUser;
+              if (user == null) return;
+
+              await client.from('device_tokens').upsert(
+                {
+                  'user_id': user.id,
+                  'token': token,
+                  'platform': 'web',
+                },
+                onConflict: 'token',
+              );
+            }
+
+            static Future<void> cancelAlarmNotification(String alarmId) async {}
+          }
+          DART
+
+      - name: Add matching native method
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/services/push_service_native.dart")
+          text = p.read_text()
+
+          marker = "  static Future<void> syncToken() async {\n"
+          method = (
+              "  static Future<bool> requestPermissionAndSync() async {\n"
+              "    final settings = await _messaging.requestPermission(\n"
+              "      alert: true,\n"
+              "      badge: true,\n"
+              "      sound: true,\n"
+              "      provisional: false,\n"
+              "    );\n\n"
+              "    if (settings.authorizationStatus == AuthorizationStatus.denied ||\n"
+              "        settings.authorizationStatus == AuthorizationStatus.notDetermined) {\n"
+              "      return false;\n"
+              "    }\n\n"
+              "    await syncToken();\n"
+              "    return true;\n"
+              "  }\n\n"
+          )
+
+          if "static Future<bool> requestPermissionAndSync()" not in text:
+              if marker not in text:
+                  raise SystemExit("Einfügestelle in push_service_native.dart nicht gefunden.")
+              text = text.replace(marker, method + marker, 1)
+
+          p.write_text(text)
+          PY
+
+      - name: Add Firebase Web Messaging to index
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("web/index.html")
+          text = p.read_text()
+
+          block = r'''
+            <!-- Firebase Web Push -->
+            <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+            <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+            <script>
+              const jfFirebaseConfig = {
+                apiKey: "AIzaSyAeoxELG1-LDMC49X4H9YnD1YaaIdrdxCA",
+                authDomain: "jugendfeuerwehr-seehausen.firebaseapp.com",
+                projectId: "jugendfeuerwehr-seehausen",
+                storageBucket: "jugendfeuerwehr-seehausen.firebasestorage.app",
+                messagingSenderId: "533422487075",
+                appId: "1:533422487075:web:d3e0a970adc728e5e4e396",
+                measurementId: "G-9W68CV9FK4"
+              };
+
+              const jfVapidKey =
+                "BGulxQWXKKuU_7xSYj1wbZv-9wpdsCyeODfbYW8P4_gQ_6f3ZSzYRtFtVSWweFmnzelmCeoHRocdwxFuXY5mgaE";
+
+              firebase.initializeApp(jfFirebaseConfig);
+              const jfMessaging = firebase.messaging();
+
+              let jfPushRegistrationPromise = null;
+
+              async function jfGetPushRegistration() {
+                if (!("serviceWorker" in navigator) ||
+                    !("PushManager" in window) ||
+                    !("Notification" in window)) {
+                  throw new Error("Web Push wird von diesem Browser nicht unterstützt.");
+                }
+
+                if (!jfPushRegistrationPromise) {
+                  const swUrl =
+                    new URL("firebase-messaging-sw.js", document.baseURI).toString();
+                  const scope =
+                    new URL(
+                      "firebase-cloud-messaging-push-scope/",
+                      document.baseURI
+                    ).pathname;
+
+                  jfPushRegistrationPromise =
+                    navigator.serviceWorker.register(swUrl, { scope });
+                }
+
+                return await jfPushRegistrationPromise;
+              }
+
+              window.jfWebPushRequestToken = async function () {
+                if (!("Notification" in window)) return "";
+
+                const permission = await Notification.requestPermission();
+                if (permission !== "granted") return "";
+
+                const registration = await jfGetPushRegistration();
+
+                return await jfMessaging.getToken({
+                  vapidKey: jfVapidKey,
+                  serviceWorkerRegistration: registration
+                });
+              };
+
+              window.jfWebPushGetToken = async function () {
+                if (!("Notification" in window) ||
+                    Notification.permission !== "granted") {
+                  return "";
+                }
+
+                const registration = await jfGetPushRegistration();
+
+                return await jfMessaging.getToken({
+                  vapidKey: jfVapidKey,
+                  serviceWorkerRegistration: registration
+                });
+              };
+            </script>
+          '''
+
+          if "jfWebPushRequestToken" not in text:
+              text = text.replace(
+                  '  <script src="flutter_bootstrap.js" async></script>',
+                  block + '\n  <script src="flutter_bootstrap.js" async></script>',
+              )
+
+          p.write_text(text)
+          PY
+
+      - name: Add Firebase messaging service worker
+        run: |
+          cat > web/firebase-messaging-sw.js <<'JS'
+          importScripts(
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"
+          );
+          importScripts(
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"
+          );
+
+          firebase.initializeApp({
+            apiKey: "AIzaSyAeoxELG1-LDMC49X4H9YnD1YaaIdrdxCA",
+            authDomain: "jugendfeuerwehr-seehausen.firebaseapp.com",
+            projectId: "jugendfeuerwehr-seehausen",
+            storageBucket: "jugendfeuerwehr-seehausen.firebasestorage.app",
+            messagingSenderId: "533422487075",
+            appId: "1:533422487075:web:d3e0a970adc728e5e4e396",
+            measurementId: "G-9W68CV9FK4"
+          });
+
+          firebase.messaging();
+
+          self.addEventListener("notificationclick", (event) => {
+            event.notification.close();
+
+            const appUrl = new URL("../", self.registration.scope).toString();
+
+            event.waitUntil(
+              clients
+                .matchAll({
+                  type: "window",
+                  includeUncontrolled: true
+                })
+                .then((clientList) => {
+                  for (const client of clientList) {
+                    if ("focus" in client) {
+                      if ("navigate" in client) {
+                        client.navigate(appUrl);
+                      }
+                      return client.focus();
+                    }
+                  }
+
+                  if (clients.openWindow) {
+                    return clients.openWindow(appUrl);
+                  }
+
+                  return undefined;
+                })
+            );
+          });
+          JS
+
+      - name: Add Web Push activation button
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/screens/home_shell.dart")
+          text = p.read_text()
+
+          if "package:flutter/foundation.dart" not in text:
+              text = text.replace(
+                  "import 'package:flutter/material.dart';",
+                  "import 'package:flutter/foundation.dart';\n"
+                  "import 'package:flutter/material.dart';",
+                  1,
+              )
+
+          needle = "                const SizedBox(height: 18),\n                FilledButton.icon(\n"
+
+          button = (
+              "                if (kIsWeb) ...[\n"
+              "                  const SizedBox(height: 8),\n"
+              "                  OutlinedButton.icon(\n"
+              "                    onPressed: () async {\n"
+              "                      final enabled =\n"
+              "                          await PushService.requestPermissionAndSync();\n\n"
+              "                      if (!context.mounted) return;\n\n"
+              "                      ScaffoldMessenger.of(context).showSnackBar(\n"
+              "                        SnackBar(\n"
+              "                          content: Text(\n"
+              "                            enabled\n"
+              "                                ? 'Benachrichtigungen auf diesem Gerät sind aktiviert.'\n"
+              "                                : 'Benachrichtigungen konnten nicht aktiviert werden. Auf dem iPhone die Web-App zuerst zum Home-Bildschirm hinzufügen und Benachrichtigungen erlauben.',\n"
+              "                          ),\n"
+              "                        ),\n"
+              "                      );\n"
+              "                    },\n"
+              "                    icon: const Icon(Icons.notifications_active_outlined),\n"
+              "                    label: const Text(\n"
+              "                      'Benachrichtigungen auf diesem Gerät aktivieren',\n"
+              "                    ),\n"
+              "                  ),\n"
+              "                ],\n"
+              "                const SizedBox(height: 18),\n"
+              "                FilledButton.icon(\n"
+          )
+
+          if "Benachrichtigungen auf diesem Gerät aktivieren" not in text:
+              if needle not in text:
+                  raise SystemExit("Profil-Einfügestelle nicht gefunden.")
+              text = text.replace(needle, button, 1)
+
+          p.write_text(text)
+          PY
+
+      - name: Keep schema file in sync
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("supabase_schema.sql")
+          text = p.read_text()
+
+          text = text.replace(
+              "platform text not null check (platform in ('android', 'ios')),",
+              "platform text not null check (platform in ('android', 'ios', 'web')),",
+          )
+
+          p.write_text(text)
+          PY
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format Dart files
+        run: dart format lib
+
+      - name: Analyze app
+        run: flutter analyze lib
+
+      - name: Build web test
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify Web Push build
+        run: |
+          set -e
+          test -f build/web/firebase-messaging-sw.js
+          grep -q "jfWebPushRequestToken" build/web/index.html
+          grep -q "firebase-cloud-messaging-push-scope" build/web/index.html
+
+      - name: Commit Web Push support
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            lib/services/push_service_web.dart \
+            lib/services/push_service_native.dart \
+            lib/screens/home_shell.dart \
+            web/index.html \
+            web/firebase-messaging-sw.js \
+            supabase_schema.sql
+
+          if git diff --cached --quiet; then
+            echo "Web-Push-Unterstützung ist bereits aktuell."
+            exit 0
+          fi
+
+          git commit -m "Add web push support for PWA"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Web Push eingerichtet" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Firebase Web Messaging eingebunden" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Web-Token werden als platform=web gespeichert" >> "$GITHUB_STEP_SUMMARY"
+          echo "- iPhone/PWA-Aktivierungsbutton eingebaut" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Service Worker für Hintergrund-Push hinzugefügt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Web Build erfolgreich geprüft" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Der vorhandene Web Build & Deploy Workflow startet nach dem Commit automatisch." >> "$GITHUB_STEP_SUMMARY"
