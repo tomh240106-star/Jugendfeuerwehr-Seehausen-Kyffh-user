@@ -1,0 +1,314 @@
+name: Prepare Web PWA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: jf-web-pwa
+  cancel-in-progress: false
+
+jobs:
+  prepare-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create web-compatible service split
+        run: |
+          set -e
+
+          if [ ! -f lib/services/push_service_native.dart ]; then
+            mv lib/services/push_service.dart lib/services/push_service_native.dart
+          fi
+
+          cat > lib/services/push_service.dart <<'DART'
+          export 'push_service_native.dart'
+              if (dart.library.html) 'push_service_web.dart';
+          DART
+
+          cat > lib/services/push_service_web.dart <<'DART'
+          import 'dart:async';
+
+          class PushService {
+            PushService._();
+
+            static final StreamController<String> _openController =
+                StreamController<String>.broadcast();
+
+            static Stream<String> get openEvents => _openController.stream;
+
+            static String? consumePendingDestination() => null;
+
+            static Future<void> initialize() async {}
+
+            static Future<void> syncToken() async {}
+
+            static Future<void> cancelAlarmNotification(String alarmId) async {}
+          }
+          DART
+
+          if [ ! -f lib/services/alarm_native_service_native.dart ]; then
+            mv lib/services/alarm_native_service.dart \
+              lib/services/alarm_native_service_native.dart
+          fi
+
+          cat > lib/services/alarm_native_service.dart <<'DART'
+          export 'alarm_native_service_native.dart'
+              if (dart.library.html) 'alarm_native_service_web.dart';
+          DART
+
+          cat > lib/services/alarm_native_service_web.dart <<'DART'
+          class AlarmNativeService {
+            static Future<void> stop() async {}
+
+            static Future<void> start({
+              required String alarmId,
+              required String title,
+              required String body,
+            }) async {}
+          }
+          DART
+
+      - name: Create Flutter web project
+        run: |
+          set -e
+          flutter create . \
+            --platforms=web \
+            --project-name jf_seehausen_kyffhaeuser
+
+      - name: Configure PWA branding
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          import shutil
+
+          web = Path("web")
+          manifest_path = web / "manifest.json"
+
+          manifest = {
+              "name": "Jugendfeuerwehr Seehausen/Kyffhäuser",
+              "short_name": "JF Seehausen",
+              "start_url": ".",
+              "display": "standalone",
+              "background_color": "#0A1F44",
+              "theme_color": "#0A1F44",
+              "description": "Interne App der Jugendfeuerwehr Seehausen/Kyffhäuser",
+              "orientation": "portrait-primary",
+              "prefer_related_applications": False,
+              "icons": [
+                  {"src": "icons/Icon-192.png", "sizes": "192x192", "type": "image/png"},
+                  {"src": "icons/Icon-512.png", "sizes": "512x512", "type": "image/png"},
+                  {"src": "icons/Icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+                  {"src": "icons/Icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+              ]
+          }
+
+          manifest_path.write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+
+          index = web / "index.html"
+          text = index.read_text(encoding="utf-8")
+          text = text.replace(
+              "<title>jf_seehausen_kyffhaeuser</title>",
+              "<title>Jugendfeuerwehr Seehausen/Kyffhäuser</title>",
+          )
+
+          head_extra = """
+            <meta name="theme-color" content="#0A1F44">
+            <meta name="apple-mobile-web-app-capable" content="yes">
+            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+            <meta name="apple-mobile-web-app-title" content="JF Seehausen">
+            <meta name="description" content="Interne App der Jugendfeuerwehr Seehausen/Kyffhäuser">
+          """
+
+          if 'apple-mobile-web-app-title' not in text:
+              text = text.replace("</head>", f"{head_extra}\n</head>")
+
+          index.write_text(text, encoding="utf-8")
+
+          source = Path("assets/branding/app_icon.png")
+          if source.exists():
+              targets = [
+                  web / "favicon.png",
+                  web / "icons/Icon-192.png",
+                  web / "icons/Icon-512.png",
+                  web / "icons/Icon-maskable-192.png",
+                  web / "icons/Icon-maskable-512.png",
+              ]
+              for target in targets:
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  shutil.copyfile(source, target)
+          PY
+
+      - name: Create persistent Web Build workflow
+        run: |
+          mkdir -p .github/workflows
+
+          cat > .github/workflows/web-build.yml <<'YAML'
+          name: Web Build & Deploy
+
+          on:
+            workflow_dispatch:
+            push:
+              branches:
+                - main
+              paths:
+                - "lib/**"
+                - "web/**"
+                - "assets/**"
+                - "pubspec.yaml"
+                - ".github/workflows/web-build.yml"
+
+          permissions:
+            contents: read
+            pages: write
+            id-token: write
+
+          concurrency:
+            group: pages
+            cancel-in-progress: true
+
+          jobs:
+            build-and-deploy:
+              runs-on: ubuntu-latest
+              environment:
+                name: github-pages
+                url: __DOLLAR__{{ steps.deployment.outputs.page_url }}
+
+              steps:
+                - name: Checkout repository
+                  uses: actions/checkout@v4
+
+                - name: Setup Flutter
+                  uses: subosito/flutter-action@v2
+                  with:
+                    channel: stable
+                    cache: true
+
+                - name: Flutter pub get
+                  run: flutter pub get
+
+                - name: Analyze active Flutter app
+                  run: flutter analyze lib
+
+                - name: Build web release
+                  run: >
+                    flutter build web
+                    --release
+                    --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+                    --dart-define=SUPABASE_URL="__DOLLAR__{{ secrets.SUPABASE_URL }}"
+                    --dart-define=SUPABASE_ANON_KEY="__DOLLAR__{{ secrets.SUPABASE_ANON_KEY }}"
+
+                - name: Verify web build
+                  run: |
+                    set -e
+                    test -f build/web/index.html
+                    test -f build/web/manifest.json
+                    test -f build/web/flutter_bootstrap.js
+
+                - name: Configure GitHub Pages
+                  uses: actions/configure-pages@v5
+                  with:
+                    enablement: true
+
+                - name: Upload GitHub Pages artifact
+                  uses: actions/upload-pages-artifact@v3
+                  with:
+                    path: build/web
+
+                - name: Deploy to GitHub Pages
+                  id: deployment
+                  uses: actions/deploy-pages@v4
+          YAML
+
+          sed -i 's/__DOLLAR__/$/g' .github/workflows/web-build.yml
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze web-compatible app
+        run: flutter analyze lib
+
+      - name: Build web release
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify web build
+        run: |
+          set -e
+          test -f build/web/index.html
+          test -f build/web/manifest.json
+          test -f build/web/flutter_bootstrap.js
+
+      - name: Commit web support
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add \
+            lib/services/push_service.dart \
+            lib/services/push_service_native.dart \
+            lib/services/push_service_web.dart \
+            lib/services/alarm_native_service.dart \
+            lib/services/alarm_native_service_native.dart \
+            lib/services/alarm_native_service_web.dart \
+            web \
+            .github/workflows/web-build.yml
+
+          if git diff --cached --quiet; then
+            echo "Web-Unterstützung ist bereits aktuell."
+          else
+            git commit -m "Add Flutter web PWA support"
+            git push origin main
+          fi
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy web app
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Summary
+        run: |
+          echo "### Web/PWA-Version erstellt" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Flutter Web erfolgreich kompiliert" >> "$GITHUB_STEP_SUMMARY"
+          echo "- PWA/Zum-Homescreen-hinzufügen vorbereitet" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Android/iOS Push-Code durch Conditional Exports geschützt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- GitHub Pages Deployment eingerichtet" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Web-Push und Alarm-Benachrichtigungen folgen als separater Schritt." >> "$GITHUB_STEP_SUMMARY"
