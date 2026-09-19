@@ -1,0 +1,300 @@
+name: iOS Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "lib/**"
+      - "ios/**"
+      - "assets/**"
+      - "pubspec.yaml"
+      - ".github/workflows/ios-build.yml"
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          xcodebuild -version
+          pod --version
+
+      - name: Create or repair iOS project
+        run: |
+          set -e
+          if [ ! -d ios ] || [ ! -f ios/Runner.xcodeproj/project.pbxproj ]; then
+            rm -rf ios
+            flutter create . \
+              --platforms=ios \
+              --org de.jfseehausen \
+              --project-name jf_seehausen_kyffhaeuser
+          fi
+
+      - name: Set bundle identifier and deployment target
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path("ios/Runner.xcodeproj/project.pbxproj")
+          text = p.read_text()
+
+          text = re.sub(
+              r'PRODUCT_BUNDLE_IDENTIFIER = [^;]+;',
+              'PRODUCT_BUNDLE_IDENTIFIER = de.jfseehausen.kyffhaeuser;',
+              text
+          )
+          text = re.sub(
+              r'IPHONEOS_DEPLOYMENT_TARGET = [^;]+;',
+              'IPHONEOS_DEPLOYMENT_TARGET = 15.0;',
+              text
+          )
+
+          if 'CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;' not in text:
+              text = re.sub(
+                  r'(PRODUCT_BUNDLE_IDENTIFIER = de\.jfseehausen\.kyffhaeuser;)',
+                  r'\1\n\t\t\t\tCODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;',
+                  text
+              )
+
+          p.write_text(text)
+          PY
+
+      - name: Restore Firebase iOS config
+        env:
+          GOOGLE_SERVICE_INFO_PLIST_BASE64: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}
+        run: |
+          set -e
+          test -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" || {
+            echo "FEHLER: Secret GOOGLE_SERVICE_INFO_PLIST_BASE64 fehlt."
+            exit 1
+          }
+
+          echo "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist
+          test -s ios/Runner/GoogleService-Info.plist
+
+          python3 - <<'PY'
+          import plistlib
+          from pathlib import Path
+
+          p = Path("ios/Runner/GoogleService-Info.plist")
+          with p.open("rb") as f:
+              data = plistlib.load(f)
+
+          bundle_id = data.get("BUNDLE_ID")
+          expected = "de.jfseehausen.kyffhaeuser"
+
+          if bundle_id != expected:
+              raise SystemExit(
+                  f"FEHLER: Firebase BUNDLE_ID ist {bundle_id!r}, erwartet {expected!r}."
+              )
+
+          print("Firebase iOS-Konfiguration passt zum Bundle Identifier.")
+          PY
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Create Podfile if missing
+        run: |
+          set -e
+          if [ ! -f ios/Podfile ]; then
+            cat > ios/Podfile <<'RUBY'
+          platform :ios, '15.0'
+
+          ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+          project 'Runner', {
+            'Debug' => :debug,
+            'Profile' => :release,
+            'Release' => :release,
+          }
+
+          def flutter_root
+            generated_xcode_build_settings_path = File.expand_path(
+              File.join('..', 'Flutter', 'Generated.xcconfig'),
+              __FILE__
+            )
+
+            unless File.exist?(generated_xcode_build_settings_path)
+              raise "#{generated_xcode_build_settings_path} must exist. Run flutter pub get first."
+            end
+
+            File.foreach(generated_xcode_build_settings_path) do |line|
+              matches = line.match(/FLUTTER_ROOT\=(.*)/)
+              return matches[1].strip if matches
+            end
+
+            raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}."
+          end
+
+          require File.expand_path(
+            File.join('packages', 'flutter_tools', 'bin', 'podhelper'),
+            flutter_root
+          )
+
+          flutter_ios_podfile_setup
+
+          target 'Runner' do
+            use_frameworks!
+            use_modular_headers!
+            flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+          end
+
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              flutter_additional_ios_build_settings(target)
+
+              target.build_configurations.each do |config|
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+              end
+            end
+          end
+          RUBY
+          fi
+
+      - name: Configure iOS notifications and background mode
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import plistlib
+
+          info = Path("ios/Runner/Info.plist")
+          with info.open("rb") as f:
+              data = plistlib.load(f)
+
+          data["FirebaseAppDelegateProxyEnabled"] = True
+          modes = list(dict.fromkeys((data.get("UIBackgroundModes") or []) + ["remote-notification"]))
+          data["UIBackgroundModes"] = modes
+
+          with info.open("wb") as f:
+              plistlib.dump(data, f)
+
+          Path("ios/Runner/Runner.entitlements").write_text(
+          """<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>aps-environment</key>
+            <string>development</string>
+          </dict>
+          </plist>
+          """
+          )
+          PY
+
+      - name: Prepare iOS alarm sound
+        run: |
+          set -e
+          test -f android/app/src/main/res/raw/jf_alarm.wav || {
+            echo "FEHLER: jf_alarm.wav fehlt im Android-Projekt."
+            exit 1
+          }
+          cp android/app/src/main/res/raw/jf_alarm.wav ios/Runner/jf_alarm.wav
+
+      - name: Generate launcher icons and splash
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Add iOS resources to Runner target
+        run: |
+          ruby <<'RUBY'
+          require 'xcodeproj'
+
+          project_path = 'ios/Runner.xcodeproj'
+          project = Xcodeproj::Project.open(project_path)
+
+          target = project.targets.find { |t| t.name == 'Runner' }
+          abort('Runner target nicht gefunden.') unless target
+
+          group = project.main_group.find_subpath('Runner', true)
+
+          ['GoogleService-Info.plist', 'jf_alarm.wav'].each do |name|
+            ref = group.files.find { |f| f.path == name }
+            ref ||= group.new_file(name)
+
+            unless target.resources_build_phase.files_references.include?(ref)
+              target.resources_build_phase.add_file_reference(ref, true)
+            end
+          end
+
+          project.save
+          RUBY
+
+      - name: Verify iOS preparation
+        run: |
+          set -e
+
+          test -f ios/Runner/GoogleService-Info.plist
+          test -f ios/Runner/Runner.entitlements
+          test -f ios/Runner/jf_alarm.wav
+          test -f ios/Podfile.lock
+          test -f ios/Runner.xcworkspace/contents.xcworkspacedata
+
+          grep -q "de.jfseehausen.kyffhaeuser" ios/Runner.xcodeproj/project.pbxproj
+          grep -q "Runner/Runner.entitlements" ios/Runner.xcodeproj/project.pbxproj
+          grep -q "remote-notification" ios/Runner/Info.plist
+          grep -q "GoogleService-Info.plist" ios/Runner.xcodeproj/project.pbxproj
+          grep -q "jf_alarm.wav" ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Analyze active Flutter app
+        run: flutter analyze lib
+
+      - name: Build iOS without codesigning
+        run: >
+          flutter build ios
+          --release
+          --no-codesign
+          --target=lib/main.dart
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify built iOS app resources
+        run: |
+          set -e
+
+          APP="build/ios/iphoneos/Runner.app"
+
+          test -d "$APP"
+          test -f "$APP/GoogleService-Info.plist" || {
+            echo "FEHLER: GoogleService-Info.plist ist nicht im gebauten Runner.app enthalten."
+            exit 1
+          }
+          test -f "$APP/jf_alarm.wav" || {
+            echo "FEHLER: jf_alarm.wav ist nicht im gebauten Runner.app enthalten."
+            exit 1
+          }
+
+          echo "iOS-Ressourcen sind im fertigen App-Bundle enthalten."
+
+      - name: Package unsigned iOS app
+        run: |
+          cd build/ios/iphoneos
+          zip -r jf-seehausen-ios-unsigned.zip Runner.app
+
+      - name: Upload unsigned iOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: jf-seehausen-ios-unsigned
+          path: build/ios/iphoneos/jf-seehausen-ios-unsigned.zip
+          if-no-files-found: error
