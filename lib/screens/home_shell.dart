@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -1623,6 +1624,31 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
                     });
                   },
                 ),
+                if (kIsWeb) ...[
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final enabled =
+                          await PushService.requestPermissionAndSync();
+
+                      if (!context.mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            enabled
+                                ? 'Benachrichtigungen auf diesem Gerät sind aktiviert.'
+                                : 'Benachrichtigungen konnten nicht aktiviert werden. Auf dem iPhone die Web-App zuerst zum Home-Bildschirm hinzufügen und Benachrichtigungen erlauben.',
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.notifications_active_outlined),
+                    label: const Text(
+                      'Benachrichtigungen auf diesem Gerät aktivieren',
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 18),
                 FilledButton.icon(
                   onPressed: _saving ? null : _save,

@@ -41,6 +41,81 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+
+  <!-- Firebase Web Push -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+  <script>
+    const jfFirebaseConfig = {
+      apiKey: "AIzaSyAeoxELG1-LDMC49X4H9YnD1YaaIdrdxCA",
+      authDomain: "jugendfeuerwehr-seehausen.firebaseapp.com",
+      projectId: "jugendfeuerwehr-seehausen",
+      storageBucket: "jugendfeuerwehr-seehausen.firebasestorage.app",
+      messagingSenderId: "533422487075",
+      appId: "1:533422487075:web:d3e0a970adc728e5e4e396",
+      measurementId: "G-9W68CV9FK4"
+    };
+
+    const jfVapidKey =
+      "BGulxQWXKKuU_7xSYj1wbZv-9wpdsCyeODfbYW8P4_gQ_6f3ZSzYRtFtVSWweFmnzelmCeoHRocdwxFuXY5mgaE";
+
+    firebase.initializeApp(jfFirebaseConfig);
+    const jfMessaging = firebase.messaging();
+
+    let jfPushRegistrationPromise = null;
+
+    async function jfGetPushRegistration() {
+      if (!("serviceWorker" in navigator) ||
+          !("PushManager" in window) ||
+          !("Notification" in window)) {
+        throw new Error("Web Push wird von diesem Browser nicht unterstützt.");
+      }
+
+      if (!jfPushRegistrationPromise) {
+        const swUrl =
+          new URL("firebase-messaging-sw.js", document.baseURI).toString();
+        const scope =
+          new URL(
+            "firebase-cloud-messaging-push-scope/",
+            document.baseURI
+          ).pathname;
+
+        jfPushRegistrationPromise =
+          navigator.serviceWorker.register(swUrl, { scope });
+      }
+
+      return await jfPushRegistrationPromise;
+    }
+
+    window.jfWebPushRequestToken = async function () {
+      if (!("Notification" in window)) return "";
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return "";
+
+      const registration = await jfGetPushRegistration();
+
+      return await jfMessaging.getToken({
+        vapidKey: jfVapidKey,
+        serviceWorkerRegistration: registration
+      });
+    };
+
+    window.jfWebPushGetToken = async function () {
+      if (!("Notification" in window) ||
+          Notification.permission !== "granted") {
+        return "";
+      }
+
+      const registration = await jfGetPushRegistration();
+
+      return await jfMessaging.getToken({
+        vapidKey: jfVapidKey,
+        serviceWorkerRegistration: registration
+      });
+    };
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

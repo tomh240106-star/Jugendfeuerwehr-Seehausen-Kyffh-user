@@ -216,6 +216,23 @@ class PushService {
     }
   }
 
+  static Future<bool> requestPermissionAndSync() async {
+    final settings = await _messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+      provisional: false,
+    );
+
+    if (settings.authorizationStatus == AuthorizationStatus.denied ||
+        settings.authorizationStatus == AuthorizationStatus.notDetermined) {
+      return false;
+    }
+
+    await syncToken();
+    return true;
+  }
+
   static Future<void> syncToken() async {
     try {
       if (Platform.isIOS) {

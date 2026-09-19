@@ -130,7 +130,7 @@ create table if not exists public.device_tokens (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
   token text not null unique,
-  platform text not null check (platform in ('android', 'ios')),
+  platform text not null check (platform in ('android', 'ios', 'web')),
   created_at timestamptz not null default now()
 );
 
