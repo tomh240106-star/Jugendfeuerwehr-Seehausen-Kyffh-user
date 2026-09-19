@@ -1,0 +1,188 @@
+name: Apply Release Hardening
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Apply safe cleanup
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # 1) Supabase: aktuelle Bezeichnung "publishableKey" verwenden,
+          #    GitHub-Secret-Name SUPABASE_ANON_KEY bleibt absichtlich unverändert.
+          p = Path("lib/main.dart")
+          text = p.read_text()
+
+          text = text.replace(
+              "const supabaseAnonKey =\n    String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');",
+              "const supabasePublishableKey =\n    String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');",
+          )
+          text = text.replace("supabaseAnonKey.isNotEmpty", "supabasePublishableKey.isNotEmpty")
+          text = text.replace("supabaseAnonKey.isEmpty", "supabasePublishableKey.isEmpty")
+          text = text.replace("anonKey: supabaseAnonKey,", "publishableKey: supabasePublishableKey,")
+          p.write_text(text)
+
+          # 2) Unnötigen Import entfernen.
+          p = Path("lib/services/push_service.dart")
+          text = p.read_text().replace("import 'dart:typed_data';\n", "")
+          p.write_text(text)
+
+          # 3) Flutter-Dropdowns auf die aktuelle API umstellen.
+          dropdown_files = [
+              "lib/screens/auth_screen.dart",
+              "lib/screens/documents_screen.dart",
+              "lib/screens/events_screen.dart",
+              "lib/screens/members_screen.dart",
+              "lib/screens/messages_screen.dart",
+          ]
+
+          for file in dropdown_files:
+              p = Path(file)
+              text = p.read_text()
+              text = re.sub(
+                  r"(DropdownButtonFormField<[^>]+>\(\s*)value:",
+                  r"\1initialValue:",
+                  text,
+              )
+              p.write_text(text)
+
+          # 4) Nicht verwendete Hilfsmethoden in events_screen.dart entfernen.
+          p = Path("lib/screens/events_screen.dart")
+          text = p.read_text()
+
+          text = re.sub(
+              r"\n  IconData _attendanceIcon\(String\? status\) \{.*?\n  \}\n(?=\n  Future<void> _setAttendance)",
+              "\n",
+              text,
+              flags=re.S,
+          )
+
+          text = re.sub(
+              r"\n  IconData _typeIcon\(String type\) \{.*?\n  \}\n(?=\n\n  String _monthShort)",
+              "\n",
+              text,
+              flags=re.S,
+          )
+
+          p.write_text(text)
+
+          # 5) Nicht verwendete Farbkonstanten aus HomeShell entfernen.
+          p = Path("lib/screens/home_shell.dart")
+          text = p.read_text()
+          for line in [
+              "  static const _navy = Color(0xFF0A1F44);\n",
+              "  static const _blue = Color(0xFF0B4EA2);\n",
+              "  static const _red = Color(0xFFE30613);\n",
+              "  static const _green = Color(0xFF13A05B);\n",
+              "  static const _orange = Color(0xFFFF7A00);\n",
+          ]:
+              text = text.replace(line, "")
+          p.write_text(text)
+
+          # 6) BuildContext nach async gaps absichern.
+          p = Path("lib/screens/alarm_screen.dart")
+          text = p.read_text()
+
+          needle = """        .neq('id', currentUser.id)
+              .order('last_name');
+
+          final eligible = List<Map<String, dynamic>>.from(eligibleRows);"""
+          replacement = """        .neq('id', currentUser.id)
+              .order('last_name');
+
+          if (!mounted) return;
+
+          final eligible = List<Map<String, dynamic>>.from(eligibleRows);"""
+          if needle not in text:
+              raise SystemExit("Alarm-Härtung 1: erwartete Stelle nicht gefunden.")
+          text = text.replace(needle, replacement, 1)
+
+          needle = """      setState(() => _activeAlarm = createdAlarm);
+              await _loadResponses();
+
+              ScaffoldMessenger.of(context).showSnackBar("""
+          replacement = """      setState(() => _activeAlarm = createdAlarm);
+              await _loadResponses();
+
+              if (!mounted) return;
+
+              ScaffoldMessenger.of(context).showSnackBar("""
+          if needle not in text:
+              raise SystemExit("Alarm-Härtung 2: erwartete Stelle nicht gefunden.")
+          text = text.replace(needle, replacement, 1)
+
+          p.write_text(text)
+          PY
+
+      - name: Remove obsolete root Dart files
+        run: |
+          set -e
+
+          echo "Alte Dart-Dateien im Repository-Stamm:"
+          find . -maxdepth 1 -type f -name '*.dart' -print
+
+          # Der aktive Flutter-Code liegt vollständig unter lib/.
+          # Der stabile Zustand ist außerdem bereits als
+          # v1.0.0-build2-crossplatform gesichert.
+          find . -maxdepth 1 -type f -name '*.dart' -delete
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format active app
+        run: dart format lib
+
+      - name: Strict analyze
+        run: flutter analyze lib
+
+      - name: Show changes
+        run: git status --short
+
+      - name: Commit hardening
+        run: |
+          set -e
+
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "Keine Änderungen notwendig."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Release hardening and cleanup"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Release-Härtung abgeschlossen" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- veraltete Supabase-Initialisierung aktualisiert" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Flutter-Dropdown-Deprecations entfernt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- BuildContext-Async-Hinweise behoben" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ungenutzten Code entfernt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- alte Dart-Dateien im Repository-Stamm entfernt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- flutter analyze lib erfolgreich" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Android- und iOS-Workflows starten durch den Commit automatisch neu." >> "$GITHUB_STEP_SUMMARY"
