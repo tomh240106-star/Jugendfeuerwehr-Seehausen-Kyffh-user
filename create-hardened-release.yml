@@ -1,0 +1,107 @@
+name: Create Hardened Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout current main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify version
+        run: |
+          set -e
+          grep -q '^version: 1.0.0+2$' pubspec.yaml || {
+            echo "FEHLER: Erwartete Version 1.0.0+2 wurde nicht gefunden."
+            exit 1
+          }
+
+      - name: Create hardened release notes
+        run: |
+          cat > RELEASE_NOTES_HARDENED.md <<'EOF'
+          # Jugendfeuerwehr Seehausen/Kyffhäuser – Hardened Cross-Platform Release
+
+          **Version:** 1.0.0+2
+
+          Dieser Release markiert den bereinigten und erneut geprüften Cross-Platform-Stand.
+
+          ## Bestätigter Stand
+
+          - Android Build erfolgreich
+          - iOS Build erfolgreich (unsigned)
+          - `flutter analyze lib` erfolgreich
+          - gemeinsame Flutter-Codebasis
+          - gemeinsame Supabase-Datenbank
+          - gemeinsame Benutzerkonten und Rollen
+          - Termine / Anwesenheit
+          - Ausbildungspläne
+          - Nachrichten / Chat
+          - Dokumente
+          - Eltern-Kind-Verknüpfung
+          - Jugendfeuerwehr-Alarm
+          - Firebase Push für Android und iOS vorbereitet
+          - iOS Firebase Bundle-ID geprüft
+          - `GoogleService-Info.plist` im gebauten iOS-App-Bundle geprüft
+          - `jf_alarm.wav` im gebauten iOS-App-Bundle geprüft
+          - veraltete und unbenutzte Code-Stellen bereinigt
+
+          ## Plattformstatus
+
+          ### Android
+          Intern nutzbar und erfolgreich gebaut.
+
+          ### iOS
+          Erfolgreich als unsigned Release-Build kompiliert. Für die Installation auf echten iPhones fehlen weiterhin Apple Developer Signing/Provisioning, APNs-Konfiguration und der Test auf einem echten iPhone.
+
+          ## Kennungen
+
+          - Package / Bundle ID: `de.jfseehausen.kyffhaeuser`
+          - iOS Mindestversion: 15.0
+          - Tag: `v1.0.0-build2-hardened`
+
+          ## Sicherheit
+
+          Service-Role-Schlüssel und Firebase-Service-Account-Private-Keys dürfen nicht in Client-Code oder Repository eingecheckt werden.
+          EOF
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+
+          TAG="v1.0.0-build2-hardened"
+
+          git fetch --tags
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG existiert bereits."
+          else
+            git tag "$TAG" "$GITHUB_SHA"
+            git push origin "$TAG"
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG existiert bereits."
+          else
+            gh release create "$TAG" \
+              --title "Jugendfeuerwehr Seehausen/Kyffhäuser 1.0.0+2 – Hardened" \
+              --notes-file RELEASE_NOTES_HARDENED.md \
+              --verify-tag
+          fi
+
+      - name: Summary
+        run: |
+          echo "### Hardened Release gesichert" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Version: 1.0.0+2" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: v1.0.0-build2-hardened" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
