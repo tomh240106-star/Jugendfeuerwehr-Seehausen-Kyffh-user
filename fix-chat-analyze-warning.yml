@@ -1,0 +1,78 @@
+name: Fix Chat Analyze Warning
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-chat-analyze-warning:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Remove unused time helper
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/screens/messages_screen.dart")
+          s = p.read_text(encoding="utf-8")
+
+          start = s.find("  String _time(dynamic value) {")
+          end = s.find("  String _clock(dynamic value) {", start)
+
+          if start < 0:
+              print("_time ist bereits entfernt.")
+          else:
+              if end < 0:
+                  raise SystemExit("_clock-Anker wurde nicht gefunden.")
+              s = s[:start] + s[end:]
+              p.write_text(s, encoding="utf-8")
+              print("Ungenutzte _time-Methode entfernt.")
+          PY
+
+      - name: Format
+        run: dart format lib/screens/messages_screen.dart
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add lib/screens/messages_screen.dart
+
+          if git diff --cached --quiet; then
+            echo "Keine Änderungen nötig."
+            exit 0
+          fi
+
+          git commit -m "Remove unused chat time helper"
+          git push origin main
