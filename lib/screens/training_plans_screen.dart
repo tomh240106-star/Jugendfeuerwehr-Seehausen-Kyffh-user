@@ -15,6 +15,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
   bool _isTrainer = false;
   String? _error;
   List<Map<String, dynamic>> _plans = [];
+  String _searchQuery = '';
+  String _statusFilter = 'alle';
 
   @override
   void initState() {
@@ -82,6 +84,68 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
     if (dt == null) return value.toString();
     return '${dt.day.toString().padLeft(2, '0')}.'
         '${dt.month.toString().padLeft(2, '0')}.${dt.year}';
+  }
+
+  String _planStatus(Map<String, dynamic> plan) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final fromRaw = DateTime.tryParse(plan['valid_from']?.toString() ?? '');
+    final untilRaw = DateTime.tryParse(plan['valid_until']?.toString() ?? '');
+
+    final from = fromRaw == null
+        ? null
+        : DateTime(fromRaw.year, fromRaw.month, fromRaw.day);
+    final until = untilRaw == null
+        ? null
+        : DateTime(untilRaw.year, untilRaw.month, untilRaw.day);
+
+    if (from != null && from.isAfter(today)) return 'zukuenftig';
+    if (until != null && until.isBefore(today)) return 'abgelaufen';
+    return 'aktiv';
+  }
+
+  String _planStatusLabel(Map<String, dynamic> plan) {
+    switch (_planStatus(plan)) {
+      case 'zukuenftig':
+        return 'Geplant';
+      case 'abgelaufen':
+        return 'Archiv';
+      default:
+        return 'Aktiv';
+    }
+  }
+
+  Color _planStatusColor(Map<String, dynamic> plan) {
+    switch (_planStatus(plan)) {
+      case 'zukuenftig':
+        return const Color(0xFF0B4EA2);
+      case 'abgelaufen':
+        return const Color(0xFF667085);
+      default:
+        return const Color(0xFF13A05B);
+    }
+  }
+
+  List<Map<String, dynamic>> get _filteredPlans {
+    final query = _searchQuery.trim().toLowerCase();
+
+    return _plans.where((plan) {
+      final title = plan['title']?.toString().toLowerCase() ?? '';
+      final description = plan['description']?.toString().toLowerCase() ?? '';
+      final status = _planStatus(plan);
+
+      final matchesQuery =
+          query.isEmpty || title.contains(query) || description.contains(query);
+      final matchesStatus = _statusFilter == 'alle' || status == _statusFilter;
+
+      return matchesQuery && matchesStatus;
+    }).toList();
+  }
+
+  int _statusCount(String status) {
+    if (status == 'alle') return _plans.length;
+    return _plans.where((plan) => _planStatus(plan) == status).length;
   }
 
   Future<void> _openPlanEditor({Map<String, dynamic>? plan}) async {
@@ -274,7 +338,69 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+              child: Column(
+                children: [
+                  TextField(
+                    onChanged: (value) {
+                      setState(() => _searchQuery = value);
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Ausbildungsplan suchen',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 42,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ChoiceChip(
+                          label: Text('Alle (${_statusCount('alle')})'),
+                          selected: _statusFilter == 'alle',
+                          onSelected: (_) =>
+                              setState(() => _statusFilter = 'alle'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text('Aktiv (${_statusCount('aktiv')})'),
+                          selected: _statusFilter == 'aktiv',
+                          onSelected: (_) =>
+                              setState(() => _statusFilter = 'aktiv'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Geplant (${_statusCount('zukuenftig')})',
+                          ),
+                          selected: _statusFilter == 'zukuenftig',
+                          onSelected: (_) =>
+                              setState(() => _statusFilter = 'zukuenftig'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Archiv (${_statusCount('abgelaufen')})',
+                          ),
+                          selected: _statusFilter == 'abgelaufen',
+                          onSelected: (_) =>
+                              setState(() => _statusFilter = 'abgelaufen'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 100),
               child: _plans.isEmpty
                   ? Container(
                       padding: const EdgeInsets.symmetric(
@@ -306,146 +432,218 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                         ],
                       ),
                     )
-                  : Column(
-                      children: _plans.map((plan) {
-                        final description =
-                            plan['description']?.toString().trim() ?? '';
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
+                  : _filteredPlans.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 40,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(22),
                             border: Border.all(
                               color: const Color(0xFFE3E8EE),
                             ),
-                            boxShadow: const [
-                              BoxShadow(
-                                blurRadius: 12,
-                                offset: Offset(0, 4),
-                                color: Color(0x0D000000),
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 60,
+                                color: blue,
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Keine passenden Ausbildungspläne gefunden.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: navy,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ),
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            onTap: () {
-                              Navigator.of(context)
-                                  .push(
-                                    MaterialPageRoute(
-                                      builder: (_) => TrainingPlanDetailsScreen(
-                                        plan: plan,
-                                        isTrainer: _isTrainer,
-                                      ),
-                                    ),
-                                  )
-                                  .then((_) => _loadPlans());
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 54,
-                                    height: 54,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFFFF0E0),
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
-                                    child: const Icon(
-                                      Icons.school_outlined,
-                                      color: orange,
-                                      size: 29,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 13),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          plan['title']?.toString() ??
-                                              'Ausbildungsplan',
-                                          style: const TextStyle(
-                                            color: navy,
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                        if (description.isNotEmpty) ...[
-                                          const SizedBox(height: 5),
-                                          Text(
-                                            description,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(
-                                              color: Color(0xFF667085),
-                                              height: 1.3,
-                                            ),
-                                          ),
-                                        ],
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.date_range_outlined,
-                                              size: 17,
-                                              color: Color(0xFF98A2B3),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Expanded(
-                                              child: Text(
-                                                '${_date(plan['valid_from'])} – ${_date(plan['valid_until'])}',
-                                                style: const TextStyle(
-                                                  color: Color(0xFF667085),
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (_isTrainer) ...[
-                                          const SizedBox(height: 10),
-                                          Row(
-                                            children: [
-                                              OutlinedButton.icon(
-                                                onPressed: () =>
-                                                    _openPlanEditor(plan: plan),
-                                                icon: const Icon(
-                                                  Icons.edit_outlined,
-                                                  size: 18,
-                                                ),
-                                                label: const Text('Bearbeiten'),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              IconButton(
-                                                tooltip: 'Löschen',
-                                                onPressed: () =>
-                                                    _deletePlan(plan),
-                                                icon: const Icon(
-                                                  Icons.delete_outline,
-                                                  color: red,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  const Icon(
-                                    Icons.chevron_right,
-                                    color: Color(0xFF98A2B3),
+                        )
+                      : Column(
+                          children: _filteredPlans.map((plan) {
+                            final description =
+                                plan['description']?.toString().trim() ?? '';
+                            final statusColor = _planStatusColor(plan);
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0xFFE3E8EE),
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    blurRadius: 12,
+                                    offset: Offset(0, 4),
+                                    color: Color(0x0D000000),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () {
+                                  Navigator.of(context)
+                                      .push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              TrainingPlanDetailsScreen(
+                                            plan: plan,
+                                            isTrainer: _isTrainer,
+                                          ),
+                                        ),
+                                      )
+                                      .then((_) => _loadPlans());
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 54,
+                                        height: 54,
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFFFF0E0),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                        ),
+                                        child: const Icon(
+                                          Icons.school_outlined,
+                                          color: orange,
+                                          size: 29,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 13),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    plan['title']?.toString() ??
+                                                        'Ausbildungsplan',
+                                                    style: const TextStyle(
+                                                      color: navy,
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 9,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        statusColor.withValues(
+                                                      alpha: 0.12,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            999),
+                                                  ),
+                                                  child: Text(
+                                                    _planStatusLabel(plan),
+                                                    style: TextStyle(
+                                                      color: statusColor,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (description.isNotEmpty) ...[
+                                              const SizedBox(height: 5),
+                                              Text(
+                                                description,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(
+                                                  color: Color(0xFF667085),
+                                                  height: 1.3,
+                                                ),
+                                              ),
+                                            ],
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.date_range_outlined,
+                                                  size: 17,
+                                                  color: Color(0xFF98A2B3),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(
+                                                    '${_date(plan['valid_from'])} – ${_date(plan['valid_until'])}',
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF667085),
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (_isTrainer) ...[
+                                              const SizedBox(height: 10),
+                                              Row(
+                                                children: [
+                                                  OutlinedButton.icon(
+                                                    onPressed: () =>
+                                                        _openPlanEditor(
+                                                            plan: plan),
+                                                    icon: const Icon(
+                                                      Icons.edit_outlined,
+                                                      size: 18,
+                                                    ),
+                                                    label: const Text(
+                                                        'Bearbeiten'),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  IconButton(
+                                                    tooltip: 'Löschen',
+                                                    onPressed: () =>
+                                                        _deletePlan(plan),
+                                                    icon: const Icon(
+                                                      Icons.delete_outline,
+                                                      color: red,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        color: Color(0xFF98A2B3),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
             ),
           ],
         ),
@@ -483,6 +681,7 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _units = [];
+  String _unitSearch = '';
 
   @override
   void initState() {
@@ -578,6 +777,33 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
     await _loadUnits();
   }
 
+  List<Map<String, dynamic>> get _filteredUnits {
+    final query = _unitSearch.trim().toLowerCase();
+    if (query.isEmpty) return _units;
+
+    return _units.where((unit) {
+      final title = unit['title']?.toString().toLowerCase() ?? '';
+      final topic = unit['topic']?.toString().toLowerCase() ?? '';
+      final objectives = unit['objectives']?.toString().toLowerCase() ?? '';
+      return title.contains(query) ||
+          topic.contains(query) ||
+          objectives.contains(query);
+    }).toList();
+  }
+
+  int get _totalDurationMinutes {
+    var total = 0;
+    for (final unit in _units) {
+      final raw = unit['duration_minutes'];
+      if (raw is int) {
+        total += raw;
+      } else {
+        total += int.tryParse(raw?.toString() ?? '') ?? 0;
+      }
+    }
+    return total;
+  }
+
   Widget _detail(String label, dynamic value, IconData icon) {
     final text = value?.toString().trim() ?? '';
     if (text.isEmpty) return const SizedBox.shrink();
@@ -663,6 +889,46 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
                           ),
                         ),
                       const SizedBox(height: 18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEAF2FB),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.menu_book_outlined,
+                              color: blue,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '${_units.length} Einheiten · '
+                                '$_totalDurationMinutes Minuten gesamt',
+                                style: const TextStyle(
+                                  color: navy,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      TextField(
+                        onChanged: (value) =>
+                            setState(() => _unitSearch = value),
+                        decoration: const InputDecoration(
+                          hintText: 'Einheit oder Thema suchen',
+                          prefixIcon: Icon(Icons.search),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
                       Row(
                         children: [
                           const Expanded(
@@ -713,7 +979,16 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
                             ),
                           ),
                         ),
-                      ..._units.map((unit) {
+                      if (_units.isNotEmpty && _filteredUnits.isEmpty)
+                        const Card(
+                          child: ListTile(
+                            leading: Icon(Icons.search_off),
+                            title: Text(
+                              'Keine passenden Ausbildungseinheiten gefunden.',
+                            ),
+                          ),
+                        ),
+                      ..._filteredUnits.map((unit) {
                         return Container(
                           margin: const EdgeInsets.only(bottom: 12),
                           decoration: BoxDecoration(
