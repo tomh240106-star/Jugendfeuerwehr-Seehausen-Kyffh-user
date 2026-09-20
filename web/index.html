@@ -64,6 +64,86 @@
 
     let jfPushRegistrationPromise = null;
 
+    let jfAlarmAudio = null;
+
+    function jfGetAlarmAudio() {
+      if (!jfAlarmAudio) {
+        jfAlarmAudio = new Audio(
+          new URL("jf_alarm.wav", document.baseURI).toString()
+        );
+        jfAlarmAudio.loop = true;
+        jfAlarmAudio.preload = "auto";
+        jfAlarmAudio.volume = 1.0;
+      }
+      return jfAlarmAudio;
+    }
+
+    window.jfWebAlarmPrime = function () {
+      try {
+        const audio = jfGetAlarmAudio();
+        const oldVolume = audio.volume;
+        audio.volume = 0.0;
+        const promise = audio.play();
+        if (promise && promise.then) {
+          promise.then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = oldVolume;
+          }).catch(() => {
+            audio.volume = oldVolume;
+          });
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = oldVolume;
+        }
+      } catch (_) {}
+    };
+
+    window.jfWebAlarmStart = function (alarmId, title, body) {
+      try {
+        const audio = jfGetAlarmAudio();
+        audio.currentTime = 0;
+        audio.loop = true;
+        audio.volume = 1.0;
+        const promise = audio.play();
+        if (promise && promise.catch) {
+          promise.catch((error) => {
+            console.warn("Web-Alarmton konnte nicht gestartet werden:", error);
+          });
+        }
+      } catch (error) {
+        console.warn("Web-Alarmton Fehler:", error);
+      }
+    };
+
+    window.jfWebAlarmStop = function () {
+      try {
+        if (!jfAlarmAudio) return;
+        jfAlarmAudio.pause();
+        jfAlarmAudio.currentTime = 0;
+      } catch (_) {}
+    };
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        const message = event.data || {};
+
+        if (message.type === "jf_alarm_start") {
+          window.jfWebAlarmStart(
+            message.alarm_id || "active",
+            message.title || "JUGENDFEUERWEHR-ALARM",
+            message.body || "Alarm öffnen und Rückmeldung geben."
+          );
+        }
+
+        if (message.type === "jf_alarm_cancel") {
+          window.jfWebAlarmStop();
+        }
+      });
+    }
+
+
     async function jfGetPushRegistration() {
       if (!("serviceWorker" in navigator) ||
           !("PushManager" in window) ||

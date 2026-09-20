@@ -17,9 +17,40 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+async function jfPostToOpenClients(message) {
+  const clientList = await clients.matchAll({
+    type: "window",
+    includeUncontrolled: true
+  });
+  for (const client of clientList) {
+    client.postMessage(message);
+  }
+}
+
 messaging.onBackgroundMessage((payload) => {
   const data = payload.data || {};
-  if ((data.source || "") === "jf_alarm_cancel") return;
+  const source = data.source || "";
+  const alarmId = data.alarm_id || "active";
+
+  if (source === "jf_alarm_cancel") {
+    jfPostToOpenClients({
+      type: "jf_alarm_cancel",
+      alarm_id: alarmId
+    });
+
+    self.registration.getNotifications({
+      tag: `jf-alarm-${alarmId}`
+    }).then((items) => items.forEach((item) => item.close()));
+
+    return;
+  }
+
+  jfPostToOpenClients({
+    type: "jf_alarm_start",
+    alarm_id: alarmId,
+    title: data.title || "JUGENDFEUERWEHR-ALARM",
+    body: data.body || "Alarm öffnen und Rückmeldung geben."
+  });
 
   const title =
     data.title ||
@@ -31,7 +62,6 @@ messaging.onBackgroundMessage((payload) => {
     (payload.notification && payload.notification.body) ||
     "Alarm öffnen und Rückmeldung geben.";
 
-  const alarmId = data.alarm_id || "active";
   const clickUrl =
     data.click_url ||
     "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/";
