@@ -1985,6 +1985,7 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
   bool _saving = false;
   bool _notificationsEnabled = true;
   String _role = '';
+  String? _email;
 
   @override
   void initState() {
@@ -2012,6 +2013,7 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
 
     setState(() {
       _role = profile?['role']?.toString() ?? '';
+      _email = user.email;
       _notificationsEnabled = profile?['notifications_enabled'] != false;
       _loading = false;
     });
@@ -2028,6 +2030,24 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
       default:
         return 'Mitglied';
     }
+  }
+
+  Color _roleColor() {
+    switch (_role) {
+      case 'ausbilder':
+        return const Color(0xFFE30613);
+      case 'eltern':
+        return const Color(0xFF0B4EA2);
+      case 'jugendmitglied':
+        return const Color(0xFF13A05B);
+      default:
+        return const Color(0xFF667085);
+    }
+  }
+
+  String _displayName() {
+    final value = '${_firstName.text.trim()} ${_lastName.text.trim()}'.trim();
+    return value.isEmpty ? 'Mein Profil' : value;
   }
 
   Future<void> _save() async {
@@ -2101,32 +2121,116 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
           : ListView(
               padding: const EdgeInsets.all(18),
               children: [
-                Center(
-                  child: Column(
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: const Color(0xFFE3E8EE),
+                    ),
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 12,
+                        offset: Offset(0, 4),
+                        color: Color(0x0D000000),
+                      ),
+                    ],
+                  ),
+                  child: Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 42,
-                        backgroundColor: Color(0xFFFFE6E8),
+                      CircleAvatar(
+                        radius: 36,
+                        backgroundColor: _roleColor().withValues(alpha: 0.12),
                         child: Icon(
                           Icons.person,
-                          size: 42,
-                          color: _red,
+                          size: 36,
+                          color: _roleColor(),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        _roleLabel(),
-                        style: const TextStyle(
-                          color: Color(0xFF667085),
-                          fontWeight: FontWeight.w700,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _displayName(),
+                              style: const TextStyle(
+                                color: _navy,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 9,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _roleColor().withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                _roleLabel(),
+                                style: TextStyle(
+                                  color: _roleColor(),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            if ((_email ?? '').isNotEmpty) ...[
+                              const SizedBox(height: 7),
+                              Text(
+                                _email!,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Color(0xFF667085),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
+                if (_role == 'eltern') ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const _ParentAreaScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.family_restroom),
+                      label: const Text('Meine Kinder öffnen'),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Persönliche Daten',
+                    style: TextStyle(
+                      color: _navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 TextField(
                   controller: _firstName,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
                     labelText: 'Vorname',
                     prefixIcon: Icon(Icons.person_outline),
@@ -2136,6 +2240,7 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _lastName,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
                     labelText: 'Nachname',
                     prefixIcon: Icon(Icons.person_outline),
@@ -2148,73 +2253,118 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
                   keyboardType: TextInputType.phone,
                   decoration: const InputDecoration(
                     labelText: 'Telefon',
+                    hintText: 'z. B. 0170 1234567',
                     prefixIcon: Icon(Icons.phone_outlined),
                     border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 8),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Push-Benachrichtigungen',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
+                const SizedBox(height: 20),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFE3E8EE),
                     ),
                   ),
-                  subtitle: const Text(
-                    'Benachrichtigungen für Termine, Nachrichten, Dokumente und Ausbildung',
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            _notificationsEnabled
+                                ? Icons.notifications_active_outlined
+                                : Icons.notifications_off_outlined,
+                            color: _notificationsEnabled
+                                ? const Color(0xFF13A05B)
+                                : const Color(0xFF98A2B3),
+                          ),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Benachrichtigungen',
+                              style: TextStyle(
+                                color: _navy,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          Switch(
+                            value: _notificationsEnabled,
+                            onChanged: (value) {
+                              setState(() {
+                                _notificationsEnabled = value;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Termine, Nachrichten, Dokumente und Ausbildung',
+                          style: TextStyle(
+                            color: Color(0xFF667085),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  value: _notificationsEnabled,
-                  onChanged: (value) {
-                    setState(() {
-                      _notificationsEnabled = value;
-                    });
-                  },
                 ),
                 if (kIsWeb) ...[
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final enabled =
+                            await PushService.requestPermissionAndSync();
+
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              enabled
+                                  ? 'Benachrichtigungen auf diesem Gerät sind aktiviert.'
+                                  : 'Benachrichtigungen konnten nicht aktiviert werden. Auf dem iPhone die Web-App zuerst zum Home-Bildschirm hinzufügen und Benachrichtigungen erlauben.',
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.notifications_active_outlined),
+                      label: const Text(
+                        'Auf diesem Gerät aktivieren',
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
                     onPressed: () async {
-                      final enabled =
-                          await PushService.requestPermissionAndSync();
+                      final sent = await PushService.sendTestNotification();
 
                       if (!context.mounted) return;
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            enabled
-                                ? 'Benachrichtigungen auf diesem Gerät sind aktiviert.'
-                                : 'Benachrichtigungen konnten nicht aktiviert werden. Auf dem iPhone die Web-App zuerst zum Home-Bildschirm hinzufügen und Benachrichtigungen erlauben.',
+                            sent
+                                ? 'Test-Benachrichtigung wurde gesendet.'
+                                : 'Test-Benachrichtigung konnte nicht gesendet werden. Bitte Benachrichtigungen auf diesem Gerät zuerst aktivieren.',
                           ),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.notifications_active_outlined),
-                    label: const Text(
-                      'Benachrichtigungen auf diesem Gerät aktivieren',
-                    ),
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('Test-Benachrichtigung senden'),
                   ),
-                ],
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: () async {
-                    final sent = await PushService.sendTestNotification();
-
-                    if (!context.mounted) return;
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          sent
-                              ? 'Test-Benachrichtigung wurde gesendet.'
-                              : 'Test-Benachrichtigung konnte nicht gesendet werden. Bitte Benachrichtigungen auf diesem Gerät zuerst aktivieren.',
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.send_outlined),
-                  label: const Text('Test-Benachrichtigung senden'),
                 ),
                 const SizedBox(height: 18),
                 FilledButton.icon(
