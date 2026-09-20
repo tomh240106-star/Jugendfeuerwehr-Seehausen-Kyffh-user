@@ -1,0 +1,51 @@
+name: Create Release Checkpoint 1.0.1+3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  checkpoint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify release version
+        run: |
+          grep -q "^version: 1.0.1+3$" pubspec.yaml
+
+      - name: Create release tag and checkpoint branch
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch --tags origin
+
+          if git rev-parse "refs/tags/v1.0.1+3" >/dev/null 2>&1; then
+            echo "Tag v1.0.1+3 existiert bereits."
+          else
+            git tag -a "v1.0.1+3" -m "Jugendfeuerwehr Seehausen/Kyffhäuser release 1.0.1+3"
+            git push origin "v1.0.1+3"
+          fi
+
+          if git ls-remote --exit-code --heads origin release-1.0.1-build3 >/dev/null 2>&1; then
+            echo "Checkpoint-Branch existiert bereits."
+          else
+            git branch release-1.0.1-build3 HEAD
+            git push origin release-1.0.1-build3
+          fi
+
+      - name: Show checkpoint
+        run: |
+          echo "Release checkpoint:"
+          git rev-parse HEAD
+          git describe --tags --exact-match HEAD || true
