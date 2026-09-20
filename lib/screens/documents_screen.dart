@@ -24,6 +24,8 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   Set<String> _readDocumentIds = {};
   String _searchQuery = '';
   String _categoryFilter = 'Alle';
+  String _sortMode = 'neueste';
+  bool _onlyNew = false;
 
   @override
   void initState() {
@@ -405,19 +407,114 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
   List<Map<String, dynamic>> get _filteredDocuments {
     final query = _searchQuery.trim().toLowerCase();
 
+    final result = _documents
+        .where((document) {
+          final title = document['title']?.toString().toLowerCase() ?? '';
+          final fileName =
+              document['file_name']?.toString().toLowerCase() ?? '';
+          final category = document['category']?.toString() ?? 'Allgemein';
+          final id = document['id']?.toString() ?? '';
+
+          final matchesQuery = query.isEmpty ||
+              title.contains(query) ||
+              fileName.contains(query);
+
+          final matchesCategory =
+              _categoryFilter == 'Alle' || category == _categoryFilter;
+
+          final matchesNew = !_onlyNew || !_readDocumentIds.contains(id);
+
+          return matchesQuery && matchesCategory && matchesNew;
+        })
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    int compareDate(Map<String, dynamic> a, Map<String, dynamic> b) {
+      final aDate = DateTime.tryParse(a['created_at']?.toString() ?? '');
+      final bDate = DateTime.tryParse(b['created_at']?.toString() ?? '');
+
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+      return aDate.compareTo(bDate);
+    }
+
+    switch (_sortMode) {
+      case 'aelteste':
+        result.sort(compareDate);
+        break;
+      case 'titel':
+        result.sort(
+          (a, b) => (a['title']?.toString() ?? '').toLowerCase().compareTo(
+                (b['title']?.toString() ?? '').toLowerCase(),
+              ),
+        );
+        break;
+      case 'kategorie':
+        result.sort((a, b) {
+          final categoryCompare = (a['category']?.toString() ?? 'Allgemein')
+              .toLowerCase()
+              .compareTo(
+                (b['category']?.toString() ?? 'Allgemein').toLowerCase(),
+              );
+          if (categoryCompare != 0) return categoryCompare;
+
+          return (a['title']?.toString() ?? '').toLowerCase().compareTo(
+                (b['title']?.toString() ?? '').toLowerCase(),
+              );
+        });
+        break;
+      case 'neueste':
+      default:
+        result.sort((a, b) => compareDate(b, a));
+        break;
+    }
+
+    return result;
+  }
+
+  int get _newDocumentCount {
     return _documents.where((document) {
-      final title = document['title']?.toString().toLowerCase() ?? '';
-      final fileName = document['file_name']?.toString().toLowerCase() ?? '';
-      final category = document['category']?.toString() ?? 'Allgemein';
+      final id = document['id']?.toString() ?? '';
+      return id.isNotEmpty && !_readDocumentIds.contains(id);
+    }).length;
+  }
 
-      final matchesQuery =
-          query.isEmpty || title.contains(query) || fileName.contains(query);
+  int _categoryCount(String category) {
+    if (category == 'Alle') return _documents.length;
 
-      final matchesCategory =
-          _categoryFilter == 'Alle' || category == _categoryFilter;
+    return _documents.where((document) {
+      return (document['category']?.toString() ?? 'Allgemein') == category;
+    }).length;
+  }
 
-      return matchesQuery && matchesCategory;
-    }).toList();
+  Future<void> _markAllDocumentsRead() async {
+    final userId = _supabase.auth.currentUser?.id ?? 'unknown';
+    final prefs = await SharedPreferences.getInstance();
+
+    final ids = _documents
+        .map((document) => document['id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    await prefs.setStringList(
+      'read_documents_$userId',
+      ids.toList(),
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _readDocumentIds = ids;
+      _onlyNew = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Alle Dokumente wurden als gelesen markiert.'),
+      ),
+    );
   }
 
   List<String> get _categories {
@@ -596,6 +693,97 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFFE3E8EE),
+                            ),
+                          ),
+                          child: Text(
+                            '${_documents.length} Dokumente · '
+                            '$_newDocumentCount neu',
+                            style: const TextStyle(
+                              color: navy,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_newDocumentCount > 0) ...[
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: 'Alle als gelesen markieren',
+                          onPressed: _markAllDocumentsRead,
+                          icon: const Icon(Icons.done_all),
+                          color: blue,
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _sortMode,
+                          decoration: const InputDecoration(
+                            labelText: 'Sortierung',
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'neueste',
+                              child: Text('Neueste zuerst'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'aelteste',
+                              child: Text('Älteste zuerst'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'titel',
+                              child: Text('Titel A–Z'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'kategorie',
+                              child: Text('Kategorie'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() => _sortMode = value);
+                            }
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        avatar: const Icon(
+                          Icons.fiber_new_outlined,
+                          size: 18,
+                        ),
+                        label: Text(
+                          'Nur neu ($_newDocumentCount)',
+                        ),
+                        selected: _onlyNew,
+                        onSelected: _newDocumentCount == 0
+                            ? null
+                            : (value) {
+                                setState(() => _onlyNew = value);
+                              },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     height: 42,
                     child: ListView.separated(
@@ -605,7 +793,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       itemBuilder: (context, index) {
                         final category = _categories[index];
                         return ChoiceChip(
-                          label: Text(category),
+                          label: Text(
+                            '$category (${_categoryCount(category)})',
+                          ),
                           selected: _categoryFilter == category,
                           onSelected: (_) {
                             setState(() => _categoryFilter = category);
