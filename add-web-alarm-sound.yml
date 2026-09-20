@@ -1,0 +1,151 @@
+name: Add Web Alarm Sound
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  web-alarm-sound:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Add web alarm sound file
+        run: |
+          test -f android/app/src/main/res/raw/jf_alarm.wav
+          cp android/app/src/main/res/raw/jf_alarm.wav web/jf_alarm.wav
+
+      - name: Replace web alarm service worker
+        env:
+          SW_B64: "aW1wb3J0U2NyaXB0cygKICAiaHR0cHM6Ly93d3cuZ3N0YXRpYy5jb20vZmlyZWJhc2Vqcy8xMC4xNC4xL2ZpcmViYXNlLWFwcC1jb21wYXQuanMiCik7CmltcG9ydFNjcmlwdHMoCiAgImh0dHBzOi8vd3d3LmdzdGF0aWMuY29tL2ZpcmViYXNlanMvMTAuMTQuMS9maXJlYmFzZS1tZXNzYWdpbmctY29tcGF0LmpzIgopOwoKZmlyZWJhc2UuaW5pdGlhbGl6ZUFwcCh7CiAgYXBpS2V5OiAiQUl6YVN5QWVveEVMRzEtTERNQzQ5WDRIOVluRDFZYWFJZHJkeENBIiwKICBhdXRoRG9tYWluOiAianVnZW5kZmV1ZXJ3ZWhyLXNlZWhhdXNlbi5maXJlYmFzZWFwcC5jb20iLAogIHByb2plY3RJZDogImp1Z2VuZGZldWVyd2Voci1zZWVoYXVzZW4iLAogIHN0b3JhZ2VCdWNrZXQ6ICJqdWdlbmRmZXVlcndlaHItc2VlaGF1c2VuLmZpcmViYXNlc3RvcmFnZS5hcHAiLAogIG1lc3NhZ2luZ1NlbmRlcklkOiAiNTMzNDIyNDg3MDc1IiwKICBhcHBJZDogIjE6NTMzNDIyNDg3MDc1OndlYjpkM2UwYTk3MGFkYzcyOGU1ZTRlMzk2IiwKICBtZWFzdXJlbWVudElkOiAiRy05VzY4Q1Y5Rks0Igp9KTsKCmNvbnN0IG1lc3NhZ2luZyA9IGZpcmViYXNlLm1lc3NhZ2luZygpOwoKYXN5bmMgZnVuY3Rpb24gamZQb3N0VG9PcGVuQ2xpZW50cyhtZXNzYWdlKSB7CiAgY29uc3QgY2xpZW50TGlzdCA9IGF3YWl0IGNsaWVudHMubWF0Y2hBbGwoewogICAgdHlwZTogIndpbmRvdyIsCiAgICBpbmNsdWRlVW5jb250cm9sbGVkOiB0cnVlCiAgfSk7CiAgZm9yIChjb25zdCBjbGllbnQgb2YgY2xpZW50TGlzdCkgewogICAgY2xpZW50LnBvc3RNZXNzYWdlKG1lc3NhZ2UpOwogIH0KfQoKbWVzc2FnaW5nLm9uQmFja2dyb3VuZE1lc3NhZ2UoKHBheWxvYWQpID0+IHsKICBjb25zdCBkYXRhID0gcGF5bG9hZC5kYXRhIHx8IHt9OwogIGNvbnN0IHNvdXJjZSA9IGRhdGEuc291cmNlIHx8ICIiOwogIGNvbnN0IGFsYXJtSWQgPSBkYXRhLmFsYXJtX2lkIHx8ICJhY3RpdmUiOwoKICBpZiAoc291cmNlID09PSAiamZfYWxhcm1fY2FuY2VsIikgewogICAgamZQb3N0VG9PcGVuQ2xpZW50cyh7CiAgICAgIHR5cGU6ICJqZl9hbGFybV9jYW5jZWwiLAogICAgICBhbGFybV9pZDogYWxhcm1JZAogICAgfSk7CgogICAgc2VsZi5yZWdpc3RyYXRpb24uZ2V0Tm90aWZpY2F0aW9ucyh7CiAgICAgIHRhZzogYGpmLWFsYXJtLSR7YWxhcm1JZH1gCiAgICB9KS50aGVuKChpdGVtcykgPT4gaXRlbXMuZm9yRWFjaCgoaXRlbSkgPT4gaXRlbS5jbG9zZSgpKSk7CgogICAgcmV0dXJuOwogIH0KCiAgamZQb3N0VG9PcGVuQ2xpZW50cyh7CiAgICB0eXBlOiAiamZfYWxhcm1fc3RhcnQiLAogICAgYWxhcm1faWQ6IGFsYXJtSWQsCiAgICB0aXRsZTogZGF0YS50aXRsZSB8fCAiSlVHRU5ERkVVRVJXRUhSLUFMQVJNIiwKICAgIGJvZHk6IGRhdGEuYm9keSB8fCAiQWxhcm0gw7ZmZm5lbiB1bmQgUsO8Y2ttZWxkdW5nIGdlYmVuLiIKICB9KTsKCiAgY29uc3QgdGl0bGUgPQogICAgZGF0YS50aXRsZSB8fAogICAgKHBheWxvYWQubm90aWZpY2F0aW9uICYmIHBheWxvYWQubm90aWZpY2F0aW9uLnRpdGxlKSB8fAogICAgIkpVR0VOREZFVUVSV0VIUi1BTEFSTSI7CgogIGNvbnN0IGJvZHkgPQogICAgZGF0YS5ib2R5IHx8CiAgICAocGF5bG9hZC5ub3RpZmljYXRpb24gJiYgcGF5bG9hZC5ub3RpZmljYXRpb24uYm9keSkgfHwKICAgICJBbGFybSDDtmZmbmVuIHVuZCBSw7xja21lbGR1bmcgZ2ViZW4uIjsKCiAgY29uc3QgY2xpY2tVcmwgPQogICAgZGF0YS5jbGlja191cmwgfHwKICAgICJodHRwczovL3RvbWgyNDAxMDYtc3Rhci5naXRodWIuaW8vSnVnZW5kZmV1ZXJ3ZWhyLVNlZWhhdXNlbi1LeWZmaC11c2VyLyI7CgogIHJldHVybiBzZWxmLnJlZ2lzdHJhdGlvbi5zaG93Tm90aWZpY2F0aW9uKHRpdGxlLCB7CiAgICBib2R5LAogICAgaWNvbjoKICAgICAgZGF0YS5pY29uX3VybCB8fAogICAgICAiaHR0cHM6Ly90b21oMjQwMTA2LXN0YXIuZ2l0aHViLmlvL0p1Z2VuZGZldWVyd2Voci1TZWVoYXVzZW4tS3lmZmgtdXNlci9pY29ucy9JY29uLTE5Mi5wbmciLAogICAgYmFkZ2U6CiAgICAgIGRhdGEuaWNvbl91cmwgfHwKICAgICAgImh0dHBzOi8vdG9taDI0MDEwNi1zdGFyLmdpdGh1Yi5pby9KdWdlbmRmZXVlcndlaHItU2VlaGF1c2VuLUt5ZmZoLXVzZXIvaWNvbnMvSWNvbi0xOTIucG5nIiwKICAgIHRhZzogYGpmLWFsYXJtLSR7YWxhcm1JZH1gLAogICAgcmVub3RpZnk6IHRydWUsCiAgICByZXF1aXJlSW50ZXJhY3Rpb246IHRydWUsCiAgICBzaWxlbnQ6IGZhbHNlLAogICAgdmlicmF0ZTogWzUwMCwgMjAwLCA1MDAsIDIwMCwgOTAwXSwKICAgIGRhdGE6IHsgLi4uZGF0YSwgY2xpY2tfdXJsOiBjbGlja1VybCB9CiAgfSk7Cn0pOwoKc2VsZi5hZGRFdmVudExpc3RlbmVyKCJub3RpZmljYXRpb25jbGljayIsIChldmVudCkgPT4gewogIGV2ZW50Lm5vdGlmaWNhdGlvbi5jbG9zZSgpOwoKICBjb25zdCBhcHBVcmwgPQogICAgKGV2ZW50Lm5vdGlmaWNhdGlvbiAmJgogICAgICBldmVudC5ub3RpZmljYXRpb24uZGF0YSAmJgogICAgICBldmVudC5ub3RpZmljYXRpb24uZGF0YS5jbGlja191cmwpIHx8CiAgICAiaHR0cHM6Ly90b21oMjQwMTA2LXN0YXIuZ2l0aHViLmlvL0p1Z2VuZGZldWVyd2Voci1TZWVoYXVzZW4tS3lmZmgtdXNlci8iOwoKICBldmVudC53YWl0VW50aWwoCiAgICBjbGllbnRzLm1hdGNoQWxsKHsgdHlwZTogIndpbmRvdyIsIGluY2x1ZGVVbmNvbnRyb2xsZWQ6IHRydWUgfSkudGhlbigoY2xpZW50TGlzdCkgPT4gewogICAgICBmb3IgKGNvbnN0IGNsaWVudCBvZiBjbGllbnRMaXN0KSB7CiAgICAgICAgaWYgKCJmb2N1cyIgaW4gY2xpZW50KSB7CiAgICAgICAgICBpZiAoIm5hdmlnYXRlIiBpbiBjbGllbnQpIGNsaWVudC5uYXZpZ2F0ZShhcHBVcmwpOwogICAgICAgICAgcmV0dXJuIGNsaWVudC5mb2N1cygpOwogICAgICAgIH0KICAgICAgfQogICAgICBpZiAoY2xpZW50cy5vcGVuV2luZG93KSByZXR1cm4gY2xpZW50cy5vcGVuV2luZG93KGFwcFVybCk7CiAgICAgIHJldHVybiB1bmRlZmluZWQ7CiAgICB9KQogICk7Cn0pOwo="
+        run: |
+          echo "$SW_B64" | base64 --decode > web/firebase-messaging-sw.js
+
+      - name: Replace web alarm native bridge
+        env:
+          SVC_B64: "aW1wb3J0ICdkYXJ0OmpzX2ludGVyb3AnOwoKQEpTKCdqZldlYkFsYXJtU3RhcnQnKQpleHRlcm5hbCB2b2lkIF9qZldlYkFsYXJtU3RhcnQoSlNTdHJpbmcgYWxhcm1JZCwgSlNTdHJpbmcgdGl0bGUsIEpTU3RyaW5nIGJvZHkpOwoKQEpTKCdqZldlYkFsYXJtU3RvcCcpCmV4dGVybmFsIHZvaWQgX2pmV2ViQWxhcm1TdG9wKCk7CgpjbGFzcyBBbGFybU5hdGl2ZVNlcnZpY2UgewogIHN0YXRpYyBGdXR1cmU8dm9pZD4gc3RvcCgpIGFzeW5jIHsKICAgIF9qZldlYkFsYXJtU3RvcCgpOwogIH0KCiAgc3RhdGljIEZ1dHVyZTx2b2lkPiBzdGFydCh7CiAgICByZXF1aXJlZCBTdHJpbmcgYWxhcm1JZCwKICAgIHJlcXVpcmVkIFN0cmluZyB0aXRsZSwKICAgIHJlcXVpcmVkIFN0cmluZyBib2R5LAogIH0pIGFzeW5jIHsKICAgIF9qZldlYkFsYXJtU3RhcnQoCiAgICAgIGFsYXJtSWQudG9KUywKICAgICAgdGl0bGUudG9KUywKICAgICAgYm9keS50b0pTLAogICAgKTsKICB9Cn0K"
+        run: |
+          echo "$SVC_B64" | base64 --decode > lib/services/alarm_native_service_web.dart
+
+      - name: Patch web page alarm audio
+        env:
+          AUDIO_B64: "CiAgICBsZXQgamZBbGFybUF1ZGlvID0gbnVsbDsKCiAgICBmdW5jdGlvbiBqZkdldEFsYXJtQXVkaW8oKSB7CiAgICAgIGlmICghamZBbGFybUF1ZGlvKSB7CiAgICAgICAgamZBbGFybUF1ZGlvID0gbmV3IEF1ZGlvKAogICAgICAgICAgbmV3IFVSTCgiamZfYWxhcm0ud2F2IiwgZG9jdW1lbnQuYmFzZVVSSSkudG9TdHJpbmcoKQogICAgICAgICk7CiAgICAgICAgamZBbGFybUF1ZGlvLmxvb3AgPSB0cnVlOwogICAgICAgIGpmQWxhcm1BdWRpby5wcmVsb2FkID0gImF1dG8iOwogICAgICAgIGpmQWxhcm1BdWRpby52b2x1bWUgPSAxLjA7CiAgICAgIH0KICAgICAgcmV0dXJuIGpmQWxhcm1BdWRpbzsKICAgIH0KCiAgICB3aW5kb3cuamZXZWJBbGFybVByaW1lID0gZnVuY3Rpb24gKCkgewogICAgICB0cnkgewogICAgICAgIGNvbnN0IGF1ZGlvID0gamZHZXRBbGFybUF1ZGlvKCk7CiAgICAgICAgY29uc3Qgb2xkVm9sdW1lID0gYXVkaW8udm9sdW1lOwogICAgICAgIGF1ZGlvLnZvbHVtZSA9IDAuMDsKICAgICAgICBjb25zdCBwcm9taXNlID0gYXVkaW8ucGxheSgpOwogICAgICAgIGlmIChwcm9taXNlICYmIHByb21pc2UudGhlbikgewogICAgICAgICAgcHJvbWlzZS50aGVuKCgpID0+IHsKICAgICAgICAgICAgYXVkaW8ucGF1c2UoKTsKICAgICAgICAgICAgYXVkaW8uY3VycmVudFRpbWUgPSAwOwogICAgICAgICAgICBhdWRpby52b2x1bWUgPSBvbGRWb2x1bWU7CiAgICAgICAgICB9KS5jYXRjaCgoKSA9PiB7CiAgICAgICAgICAgIGF1ZGlvLnZvbHVtZSA9IG9sZFZvbHVtZTsKICAgICAgICAgIH0pOwogICAgICAgIH0gZWxzZSB7CiAgICAgICAgICBhdWRpby5wYXVzZSgpOwogICAgICAgICAgYXVkaW8uY3VycmVudFRpbWUgPSAwOwogICAgICAgICAgYXVkaW8udm9sdW1lID0gb2xkVm9sdW1lOwogICAgICAgIH0KICAgICAgfSBjYXRjaCAoXykge30KICAgIH07CgogICAgd2luZG93LmpmV2ViQWxhcm1TdGFydCA9IGZ1bmN0aW9uIChhbGFybUlkLCB0aXRsZSwgYm9keSkgewogICAgICB0cnkgewogICAgICAgIGNvbnN0IGF1ZGlvID0gamZHZXRBbGFybUF1ZGlvKCk7CiAgICAgICAgYXVkaW8uY3VycmVudFRpbWUgPSAwOwogICAgICAgIGF1ZGlvLmxvb3AgPSB0cnVlOwogICAgICAgIGF1ZGlvLnZvbHVtZSA9IDEuMDsKICAgICAgICBjb25zdCBwcm9taXNlID0gYXVkaW8ucGxheSgpOwogICAgICAgIGlmIChwcm9taXNlICYmIHByb21pc2UuY2F0Y2gpIHsKICAgICAgICAgIHByb21pc2UuY2F0Y2goKGVycm9yKSA9PiB7CiAgICAgICAgICAgIGNvbnNvbGUud2FybigiV2ViLUFsYXJtdG9uIGtvbm50ZSBuaWNodCBnZXN0YXJ0ZXQgd2VyZGVuOiIsIGVycm9yKTsKICAgICAgICAgIH0pOwogICAgICAgIH0KICAgICAgfSBjYXRjaCAoZXJyb3IpIHsKICAgICAgICBjb25zb2xlLndhcm4oIldlYi1BbGFybXRvbiBGZWhsZXI6IiwgZXJyb3IpOwogICAgICB9CiAgICB9OwoKICAgIHdpbmRvdy5qZldlYkFsYXJtU3RvcCA9IGZ1bmN0aW9uICgpIHsKICAgICAgdHJ5IHsKICAgICAgICBpZiAoIWpmQWxhcm1BdWRpbykgcmV0dXJuOwogICAgICAgIGpmQWxhcm1BdWRpby5wYXVzZSgpOwogICAgICAgIGpmQWxhcm1BdWRpby5jdXJyZW50VGltZSA9IDA7CiAgICAgIH0gY2F0Y2ggKF8pIHt9CiAgICB9OwoKICAgIGlmICgic2VydmljZVdvcmtlciIgaW4gbmF2aWdhdG9yKSB7CiAgICAgIG5hdmlnYXRvci5zZXJ2aWNlV29ya2VyLmFkZEV2ZW50TGlzdGVuZXIoIm1lc3NhZ2UiLCAoZXZlbnQpID0+IHsKICAgICAgICBjb25zdCBtZXNzYWdlID0gZXZlbnQuZGF0YSB8fCB7fTsKCiAgICAgICAgaWYgKG1lc3NhZ2UudHlwZSA9PT0gImpmX2FsYXJtX3N0YXJ0IikgewogICAgICAgICAgd2luZG93LmpmV2ViQWxhcm1TdGFydCgKICAgICAgICAgICAgbWVzc2FnZS5hbGFybV9pZCB8fCAiYWN0aXZlIiwKICAgICAgICAgICAgbWVzc2FnZS50aXRsZSB8fCAiSlVHRU5ERkVVRVJXRUhSLUFMQVJNIiwKICAgICAgICAgICAgbWVzc2FnZS5ib2R5IHx8ICJBbGFybSDDtmZmbmVuIHVuZCBSw7xja21lbGR1bmcgZ2ViZW4uIgogICAgICAgICAgKTsKICAgICAgICB9CgogICAgICAgIGlmIChtZXNzYWdlLnR5cGUgPT09ICJqZl9hbGFybV9jYW5jZWwiKSB7CiAgICAgICAgICB3aW5kb3cuamZXZWJBbGFybVN0b3AoKTsKICAgICAgICB9CiAgICAgIH0pOwogICAgfQoK"
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          path = Path("web/index.html")
+          text = path.read_text(encoding="utf-8")
+          audio_block = base64.b64decode(os.environ["AUDIO_B64"]).decode("utf-8")
+
+          marker = "    let jfPushRegistrationPromise = null;\n"
+          if "window.jfWebAlarmStart = function" not in text:
+              if marker not in text:
+                  raise SystemExit("Audio-Einfügestelle in web/index.html nicht gefunden.")
+              text = text.replace(marker, marker + audio_block, 1)
+
+          old_request = '''    window.jfWebPushRequestToken = async function () {
+              if (!("Notification" in window)) return "";
+
+              const permission = await Notification.requestPermission();
+          '''
+          new_request = '''    window.jfWebPushRequestToken = async function () {
+              if (!("Notification" in window)) return "";
+
+              window.jfWebAlarmPrime();
+
+              const permission = await Notification.requestPermission();
+          '''
+          if old_request in text:
+              text = text.replace(old_request, new_request, 1)
+
+          old_handler = '''    jfMessaging.onMessage((payload) => {
+              const data = payload?.data || {};
+              if ((data.source || "") !== "jf_alarm") return;
+          '''
+          new_handler = '''    jfMessaging.onMessage((payload) => {
+              const data = payload?.data || {};
+              const source = data.source || "";
+
+              if (source === "jf_alarm_cancel") {
+                window.jfWebAlarmStop();
+                return;
+              }
+
+              if (source !== "jf_alarm") return;
+
+              window.jfWebAlarmStart(
+                data.alarm_id || "active",
+                data.title || "JUGENDFEUERWEHR-ALARM",
+                data.body || "Alarm öffnen und Rückmeldung geben."
+              );
+          '''
+          if old_handler in text:
+              text = text.replace(old_handler, new_handler, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/services/alarm_native_service_web.dart
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify web alarm sound
+        run: |
+          test -f build/web/jf_alarm.wav
+          grep -q "jfWebAlarmStart" build/web/index.html
+          grep -q "jfWebAlarmStop" build/web/index.html
+          grep -q "jf_alarm_cancel" build/web/firebase-messaging-sw.js
+          grep -q "jf_alarm_start" build/web/firebase-messaging-sw.js
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add             web/jf_alarm.wav             web/firebase-messaging-sw.js             web/index.html             lib/services/alarm_native_service_web.dart
+
+          if git diff --cached --quiet; then
+            echo "Web-Alarmton bereits eingebaut."
+            exit 0
+          fi
+
+          git commit -m "Add persistent web alarm sound"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Web-Alarmton eingebaut" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- verwendet den vorhandenen Jugendfeuerwehr-Alarmton" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ton startet bei eingehendem Web-Alarm, wenn Browser-Audio freigegeben ist" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ton läuft in Schleife" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ton stoppt nach Rückmeldung" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Ton stoppt bei Alarmende durch den Ausbilder" >> "$GITHUB_STEP_SUMMARY"
