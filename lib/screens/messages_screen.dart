@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -548,16 +550,22 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
 
   RealtimeChannel? _messagesChannel;
+  Timer? _receiptTimer;
   bool _loading = true;
   bool _sending = false;
   String? _error;
   List<Map<String, dynamic>> _messages = [];
+  final Map<String, List<Map<String, dynamic>>> _readReceiptsByMessage = {};
 
   @override
   void initState() {
     super.initState();
     _loadMessages();
     _subscribeToMessages();
+    _receiptTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _loadReadReceipts(),
+    );
   }
 
   void _subscribeToMessages() {
@@ -641,6 +649,7 @@ class _ChatScreenState extends State<ChatScreen> {
       });
 
       await _markMessagesRead();
+      await _loadReadReceipts();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
@@ -727,6 +736,175 @@ class _ChatScreenState extends State<ChatScreen> {
         previous['sender_id']?.toString();
   }
 
+  Future<void> _loadReadReceipts() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final rows = await _supabase.rpc(
+        'get_message_read_status',
+        params: {
+          'p_conversation_id': widget.conversation['id'],
+        },
+      );
+
+      final grouped = <String, List<Map<String, dynamic>>>{};
+
+      for (final raw in (rows as List<dynamic>)) {
+        final receipt = Map<String, dynamic>.from(raw as Map);
+        final messageId = receipt['message_id']?.toString();
+        if (messageId == null || messageId.isEmpty) continue;
+
+        grouped.putIfAbsent(messageId, () => []).add(receipt);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _readReceiptsByMessage
+          ..clear()
+          ..addAll(grouped);
+      });
+    } catch (error) {
+      debugPrint('Lesebestätigungen konnten nicht geladen werden: $error');
+    }
+  }
+
+  List<Map<String, dynamic>> _receiptsFor(
+    Map<String, dynamic> message,
+  ) {
+    final id = message['id']?.toString() ?? '';
+    return _readReceiptsByMessage[id] ?? const <Map<String, dynamic>>[];
+  }
+
+  String _recipientName(Map<String, dynamic> receipt) {
+    final first = receipt['first_name']?.toString().trim() ?? '';
+    final last = receipt['last_name']?.toString().trim() ?? '';
+    final name = '$first $last'.trim();
+    return name.isEmpty ? 'Mitglied' : name;
+  }
+
+  String _receiptSummary(Map<String, dynamic> message) {
+    final receipts = _receiptsFor(message);
+    if (receipts.isEmpty) return 'Gesendet';
+
+    final readCount =
+        receipts.where((receipt) => receipt['is_read'] == true).length;
+
+    if (receipts.length == 1) {
+      return readCount == 1 ? 'Gelesen' : 'Gesendet';
+    }
+
+    return 'Gelesen von $readCount/${receipts.length}';
+  }
+
+  IconData _receiptIcon(Map<String, dynamic> message) {
+    final receipts = _receiptsFor(message);
+    final anyRead = receipts.any((receipt) => receipt['is_read'] == true);
+    return anyRead ? Icons.done_all : Icons.done;
+  }
+
+  Color _receiptIconColor(Map<String, dynamic> message) {
+    final receipts = _receiptsFor(message);
+    if (receipts.isEmpty) return Colors.white70;
+
+    final allRead = receipts.every((receipt) => receipt['is_read'] == true);
+    return allRead ? const Color(0xFFB7F7C7) : Colors.white70;
+  }
+
+  String _receiptDateTime(dynamic value) {
+    final dt = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (dt == null) return '';
+
+    return '${dt.day.toString().padLeft(2, '0')}.'
+        '${dt.month.toString().padLeft(2, '0')}.${dt.year} · '
+        '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')} Uhr';
+  }
+
+  void _showReadReceipts(Map<String, dynamic> message) {
+    final receipts = _receiptsFor(message);
+    final readCount =
+        receipts.where((receipt) => receipt['is_read'] == true).length;
+
+    showModalBottomSheet(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Lesebestätigung',
+                  style: TextStyle(
+                    color: Color(0xFF0A1F44),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  receipts.isEmpty
+                      ? 'Für diese Nachricht sind noch keine Empfängerinformationen verfügbar.'
+                      : '$readCount von ${receipts.length} Empfängern haben die Nachricht gelesen.',
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (receipts.isEmpty)
+                  const Card(
+                    child: ListTile(
+                      leading: Icon(Icons.done),
+                      title: Text('Nachricht wurde gesendet.'),
+                    ),
+                  )
+                else
+                  ...receipts.map((receipt) {
+                    final isRead = receipt['is_read'] == true;
+                    final readAt = _receiptDateTime(receipt['read_at']);
+
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: (isRead
+                                  ? const Color(0xFF13A05B)
+                                  : const Color(0xFF98A2B3))
+                              .withValues(alpha: 0.12),
+                          child: Icon(
+                            isRead ? Icons.done_all : Icons.done,
+                            color: isRead
+                                ? const Color(0xFF13A05B)
+                                : const Color(0xFF667085),
+                          ),
+                        ),
+                        title: Text(
+                          _recipientName(receipt),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          isRead && readAt.isNotEmpty
+                              ? 'Gelesen am $readAt'
+                              : 'Noch nicht gelesen',
+                        ),
+                      ),
+                    );
+                  }),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _sendMessage() async {
     final body = _messageController.text.trim();
     final user = _supabase.auth.currentUser;
@@ -779,6 +957,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    _receiptTimer?.cancel();
     final channel = _messagesChannel;
     if (channel != null) {
       _supabase.removeChannel(channel);
@@ -970,12 +1149,36 @@ class _ChatScreenState extends State<ChatScreen> {
                                                   ),
                                                   if (mine) ...[
                                                     const SizedBox(width: 5),
-                                                    Icon(
-                                                      message['read_at'] == null
-                                                          ? Icons.done
-                                                          : Icons.done_all,
-                                                      size: 15,
-                                                      color: Colors.white70,
+                                                    Tooltip(
+                                                      message: _receiptSummary(
+                                                        message,
+                                                      ),
+                                                      child: InkWell(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(
+                                                          999,
+                                                        ),
+                                                        onTap: () =>
+                                                            _showReadReceipts(
+                                                          message,
+                                                        ),
+                                                        child: Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .all(2),
+                                                          child: Icon(
+                                                            _receiptIcon(
+                                                              message,
+                                                            ),
+                                                            size: 15,
+                                                            color:
+                                                                _receiptIconColor(
+                                                              message,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
                                                     ),
                                                   ],
                                                 ],
