@@ -88,11 +88,45 @@ class _HomeShellState extends State<HomeShell> {
     if (user == null) return;
 
     try {
-      final unreadRows = await Supabase.instance.client
-          .from('messages')
-          .select('id')
-          .neq('sender_id', user.id)
-          .isFilter('read_at', null);
+      final memberships = await Supabase.instance.client
+          .from('conversation_members')
+          .select('conversation_id,last_read_at')
+          .eq('user_id', user.id);
+
+      final lastReadByConversation = <String, DateTime?>{};
+      final conversationIds = <String>[];
+
+      for (final row in memberships) {
+        final conversationId = row['conversation_id']?.toString();
+        if (conversationId == null || conversationId.isEmpty) continue;
+
+        conversationIds.add(conversationId);
+        lastReadByConversation[conversationId] =
+            DateTime.tryParse(row['last_read_at']?.toString() ?? '');
+      }
+
+      var unreadMessages = 0;
+
+      if (conversationIds.isNotEmpty) {
+        final messageRows = await Supabase.instance.client
+            .from('messages')
+            .select('conversation_id,sender_id,created_at')
+            .inFilter('conversation_id', conversationIds);
+
+        for (final row in messageRows) {
+          if (row['sender_id']?.toString() == user.id) continue;
+
+          final conversationId = row['conversation_id']?.toString();
+          final createdAt =
+              DateTime.tryParse(row['created_at']?.toString() ?? '');
+          if (conversationId == null || createdAt == null) continue;
+
+          final lastRead = lastReadByConversation[conversationId];
+          if (lastRead == null || createdAt.isAfter(lastRead)) {
+            unreadMessages++;
+          }
+        }
+      }
 
       final documentRows =
           await Supabase.instance.client.from('documents').select('id');
@@ -109,7 +143,7 @@ class _HomeShellState extends State<HomeShell> {
       if (!mounted) return;
 
       setState(() {
-        _unreadMessages = unreadRows.length;
+        _unreadMessages = unreadMessages;
         _newDocuments = newDocs;
       });
     } catch (_) {}
@@ -252,6 +286,8 @@ class _ModernDashboardState extends State<_ModernDashboard> {
   Map<String, dynamic>? _trainingPlan;
   Map<String, dynamic>? _activeAlarm;
   int _memberCount = 0;
+  int _upcomingEventCount = 0;
+  int _openAttendanceCount = 0;
 
   @override
   void initState() {
@@ -277,27 +313,58 @@ class _ModernDashboardState extends State<_ModernDashboard> {
           .eq('id', user.id)
           .maybeSingle();
 
+      final role = profile?['role']?.toString().trim().toLowerCase() ?? '';
+      final isTrainer = role == 'ausbilder';
+      final canUseAlarm = role == 'ausbilder' || role == 'jugendmitglied';
+
       final eventRows = await _supabase
           .from('events')
           .select('id,title,starts_at,location')
           .gte('starts_at', DateTime.now().toUtc().toIso8601String())
-          .order('starts_at')
-          .limit(1);
+          .order('starts_at');
 
       Map<String, dynamic>? nextEvent;
       String? attendance;
+      var openAttendanceCount = 0;
 
       if (eventRows.isNotEmpty) {
         nextEvent = Map<String, dynamic>.from(eventRows.first);
 
-        final row = await _supabase
-            .from('event_attendance')
-            .select('status')
-            .eq('event_id', nextEvent['id'])
-            .eq('user_id', user.id)
-            .maybeSingle();
+        if (role != 'eltern') {
+          final eventIds = eventRows
+              .map((event) => event['id']?.toString())
+              .whereType<String>()
+              .toList();
 
-        attendance = row?['status']?.toString();
+          final attendanceRows = eventIds.isEmpty
+              ? const <Map<String, dynamic>>[]
+              : List<Map<String, dynamic>>.from(
+                  await _supabase
+                      .from('event_attendance')
+                      .select('event_id,status')
+                      .eq('user_id', user.id)
+                      .inFilter('event_id', eventIds),
+                );
+
+          final statusByEvent = <String, String>{};
+          for (final row in attendanceRows) {
+            final eventId = row['event_id']?.toString();
+            final status = row['status']?.toString();
+            if (eventId != null && status != null) {
+              statusByEvent[eventId] = status;
+            }
+          }
+
+          attendance = statusByEvent[nextEvent['id']?.toString()];
+
+          for (final event in eventRows) {
+            final eventId = event['id']?.toString();
+            final status = eventId == null ? null : statusByEvent[eventId];
+            if (status == null || status == 'offen') {
+              openAttendanceCount++;
+            }
+          }
+        }
       }
 
       final today = DateTime.now();
@@ -311,10 +378,6 @@ class _ModernDashboardState extends State<_ModernDashboard> {
           .or('valid_until.is.null,valid_until.gte.$todayText')
           .order('valid_from')
           .limit(1);
-
-      final role = profile?['role']?.toString().trim().toLowerCase() ?? '';
-      final isTrainer = role == 'ausbilder';
-      final canUseAlarm = role == 'ausbilder' || role == 'jugendmitglied';
 
       Map<String, dynamic>? activeAlarm;
       if (canUseAlarm) {
@@ -347,6 +410,8 @@ class _ModernDashboardState extends State<_ModernDashboard> {
         _activeAlarm = activeAlarm;
         _isTrainer = isTrainer;
         _memberCount = memberCount;
+        _upcomingEventCount = eventRows.length;
+        _openAttendanceCount = openAttendanceCount;
         _loading = false;
         _error = null;
       });
@@ -451,10 +516,51 @@ class _ModernDashboardState extends State<_ModernDashboard> {
                   title: _nextEvent?['title']?.toString() ?? 'Kein Termin',
                   subtitle: _nextEvent == null
                       ? 'Aktuell ist kein zukünftiger Termin eingetragen.'
-                      : '${_eventDate(_nextEvent!['starts_at'])}\n'
-                          '${_nextEvent!['location'] ?? ''}\n'
-                          '• ${_attendanceText()}',
+                      : (_profile?['role']?.toString() == 'eltern'
+                          ? '${_eventDate(_nextEvent!['starts_at'])}\n'
+                              '${_nextEvent!['location'] ?? ''}'
+                          : '${_eventDate(_nextEvent!['starts_at'])}\n'
+                              '${_nextEvent!['location'] ?? ''}\n'
+                              '• ${_attendanceText()}'),
                   onTap: widget.onOpenTermine,
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _DashboardStat(
+                        icon: Icons.event_available_outlined,
+                        value: '$_upcomingEventCount',
+                        label: 'kommende Termine',
+                        onTap: widget.onOpenTermine,
+                      ),
+                    ),
+                    if (_profile?['role']?.toString() != 'eltern') ...[
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _DashboardStat(
+                          icon: Icons.how_to_reg_outlined,
+                          value: '$_openAttendanceCount',
+                          label: 'Rückmeldungen offen',
+                          onTap: widget.onOpenTermine,
+                          highlight: _openAttendanceCount > 0,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _DashboardStat(
+                        icon: Icons.notifications_none,
+                        value: '${widget.unreadMessages + widget.newDocuments}',
+                        label: 'neue Hinweise',
+                        onTap: widget.unreadMessages > 0
+                            ? widget.onOpenNachrichten
+                            : widget.onOpenDokumente,
+                        highlight: widget.unreadMessages > 0 ||
+                            widget.newDocuments > 0,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 14),
                 Row(
@@ -746,6 +852,78 @@ class _FeatureCard extends StatelessWidget {
               const Icon(
                 Icons.chevron_right,
                 color: Colors.white,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardStat extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String label;
+  final VoidCallback onTap;
+  final bool highlight;
+
+  const _DashboardStat({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.onTap,
+    this.highlight = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const navy = Color(0xFF0A1F44);
+    const red = Color(0xFFE30613);
+
+    final accent = highlight ? red : navy;
+
+    return Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color:
+              highlight ? red.withValues(alpha: 0.28) : const Color(0xFFE3E8EE),
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 13,
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: accent, size: 24),
+              const SizedBox(height: 7),
+              Text(
+                value,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                label,
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFF667085),
+                  fontSize: 11,
+                  height: 1.15,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
