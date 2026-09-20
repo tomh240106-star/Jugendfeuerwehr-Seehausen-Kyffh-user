@@ -1,0 +1,232 @@
+name: Fix Web Alarm Notifications
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-web-alarm:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Replace Firebase messaging service worker
+        shell: bash
+        run: |
+          cat > web/firebase-messaging-sw.js <<'JS'
+          importScripts(
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"
+          );
+          importScripts(
+            "https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"
+          );
+
+          firebase.initializeApp({
+            apiKey: "AIzaSyAeoxELG1-LDMC49X4H9YnD1YaaIdrdxCA",
+            authDomain: "jugendfeuerwehr-seehausen.firebaseapp.com",
+            projectId: "jugendfeuerwehr-seehausen",
+            storageBucket: "jugendfeuerwehr-seehausen.firebasestorage.app",
+            messagingSenderId: "533422487075",
+            appId: "1:533422487075:web:d3e0a970adc728e5e4e396",
+            measurementId: "G-9W68CV9FK4"
+          });
+
+          const messaging = firebase.messaging();
+
+          messaging.onBackgroundMessage((payload) => {
+            const data = payload.data || {};
+            const source = data.source || "";
+
+            if (source === "jf_alarm_cancel") {
+              return;
+            }
+
+            const title =
+              data.title ||
+              payload.notification?.title ||
+              "JUGENDFEUERWEHR-ALARM";
+
+            const body =
+              data.body ||
+              payload.notification?.body ||
+              "Alarm öffnen und Rückmeldung geben.";
+
+            const alarmId = data.alarm_id || "active";
+            const clickUrl =
+              data.click_url ||
+              "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/";
+
+            return self.registration.showNotification(title, {
+              body,
+              icon:
+                data.icon_url ||
+                "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/icons/Icon-192.png",
+              badge:
+                data.icon_url ||
+                "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/icons/Icon-192.png",
+              tag: `jf-alarm-${alarmId}`,
+              renotify: true,
+              requireInteraction: true,
+              silent: false,
+              vibrate: [500, 200, 500, 200, 900],
+              data: {
+                ...data,
+                click_url: clickUrl
+              }
+            });
+          });
+
+          self.addEventListener("notificationclick", (event) => {
+            event.notification.close();
+
+            const appUrl =
+              event.notification?.data?.click_url ||
+              "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/";
+
+            event.waitUntil(
+              clients
+                .matchAll({
+                  type: "window",
+                  includeUncontrolled: true
+                })
+                .then((clientList) => {
+                  for (const client of clientList) {
+                    if ("focus" in client) {
+                      if ("navigate" in client) {
+                        client.navigate(appUrl);
+                      }
+                      return client.focus();
+                    }
+                  }
+
+                  if (clients.openWindow) {
+                    return clients.openWindow(appUrl);
+                  }
+
+                  return undefined;
+                })
+            );
+          });
+          JS
+
+      - name: Add foreground alarm handling
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          p = Path("web/index.html")
+          text = p.read_text(encoding="utf-8")
+
+          marker = "    window.jfWebPushGetToken = async function () {\n"
+
+          foreground = '''    jfMessaging.onMessage((payload) => {
+              const data = payload?.data || {};
+              const source = data.source || "";
+
+              if (source !== "jf_alarm") return;
+
+              const title =
+                data.title ||
+                payload?.notification?.title ||
+                "JUGENDFEUERWEHR-ALARM";
+
+              const body =
+                data.body ||
+                payload?.notification?.body ||
+                "Alarm öffnen und Rückmeldung geben.";
+
+              if (Notification.permission === "granted") {
+                jfGetPushRegistration().then((registration) => {
+                  registration.showNotification(title, {
+                    body,
+                    icon: data.icon_url || "icons/Icon-192.png",
+                    badge: data.icon_url || "icons/Icon-192.png",
+                    tag: `jf-alarm-${data.alarm_id || "active"}`,
+                    renotify: true,
+                    requireInteraction: true,
+                    silent: false,
+                    vibrate: [500, 200, 500, 200, 900],
+                    data: {
+                      ...data,
+                      click_url:
+                        data.click_url ||
+                        window.location.origin +
+                          "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+                    }
+                  });
+                });
+              }
+            });
+
+'''
+
+          if "jfMessaging.onMessage((payload)" not in text:
+              if marker not in text:
+                  raise SystemExit("Einfügestelle in web/index.html nicht gefunden.")
+              text = text.replace(marker, foreground + marker, 1)
+
+          p.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify notification handler
+        run: |
+          set -e
+          grep -q "onBackgroundMessage" build/web/firebase-messaging-sw.js
+          grep -q "showNotification" build/web/firebase-messaging-sw.js
+          grep -q "requireInteraction" build/web/firebase-messaging-sw.js
+          grep -q "silent: false" build/web/firebase-messaging-sw.js
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add web/firebase-messaging-sw.js web/index.html
+
+          if git diff --cached --quiet; then
+            echo "Web-Alarm-Fix bereits vorhanden."
+            exit 0
+          fi
+
+          git commit -m "Fix web alarm notification display"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Web-Alarm-Benachrichtigungen verbessert" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Hintergrund-Push wird ausdrücklich mit showNotification angezeigt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Alarm-Push bleibt nach Möglichkeit sichtbar" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Vibration aktiviert, soweit der Browser sie unterstützt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- silent=false gesetzt" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Web Build erfolgreich geprüft" >> "$GITHUB_STEP_SUMMARY"
