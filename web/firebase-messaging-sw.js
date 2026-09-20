@@ -15,34 +15,63 @@ firebase.initializeApp({
   measurementId: "G-9W68CV9FK4"
 });
 
-firebase.messaging();
+const messaging = firebase.messaging();
+
+messaging.onBackgroundMessage((payload) => {
+  const data = payload.data || {};
+  if ((data.source || "") === "jf_alarm_cancel") return;
+
+  const title =
+    data.title ||
+    (payload.notification && payload.notification.title) ||
+    "JUGENDFEUERWEHR-ALARM";
+
+  const body =
+    data.body ||
+    (payload.notification && payload.notification.body) ||
+    "Alarm öffnen und Rückmeldung geben.";
+
+  const alarmId = data.alarm_id || "active";
+  const clickUrl =
+    data.click_url ||
+    "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/";
+
+  return self.registration.showNotification(title, {
+    body,
+    icon:
+      data.icon_url ||
+      "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/icons/Icon-192.png",
+    badge:
+      data.icon_url ||
+      "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/icons/Icon-192.png",
+    tag: `jf-alarm-${alarmId}`,
+    renotify: true,
+    requireInteraction: true,
+    silent: false,
+    vibrate: [500, 200, 500, 200, 900],
+    data: { ...data, click_url: clickUrl }
+  });
+});
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const appUrl = new URL("../", self.registration.scope).toString();
+  const appUrl =
+    (event.notification &&
+      event.notification.data &&
+      event.notification.data.click_url) ||
+    "https://tomh240106-star.github.io/Jugendfeuerwehr-Seehausen-Kyffh-user/";
 
   event.waitUntil(
-    clients
-      .matchAll({
-        type: "window",
-        includeUncontrolled: true
-      })
-      .then((clientList) => {
-        for (const client of clientList) {
-          if ("focus" in client) {
-            if ("navigate" in client) {
-              client.navigate(appUrl);
-            }
-            return client.focus();
-          }
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) {
+          if ("navigate" in client) client.navigate(appUrl);
+          return client.focus();
         }
-
-        if (clients.openWindow) {
-          return clients.openWindow(appUrl);
-        }
-
-        return undefined;
-      })
+      }
+      if (clients.openWindow) return clients.openWindow(appUrl);
+      return undefined;
+    })
   );
 });

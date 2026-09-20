@@ -101,6 +101,44 @@
       });
     };
 
+
+    jfMessaging.onMessage((payload) => {
+      const data = payload?.data || {};
+      if ((data.source || "") !== "jf_alarm") return;
+
+      const title =
+        data.title ||
+        payload?.notification?.title ||
+        "JUGENDFEUERWEHR-ALARM";
+
+      const body =
+        data.body ||
+        payload?.notification?.body ||
+        "Alarm öffnen und Rückmeldung geben.";
+
+      if (Notification.permission === "granted") {
+        jfGetPushRegistration().then((registration) => {
+          registration.showNotification(title, {
+            body,
+            icon: data.icon_url || "icons/Icon-192.png",
+            badge: data.icon_url || "icons/Icon-192.png",
+            tag: `jf-alarm-${data.alarm_id || "active"}`,
+            renotify: true,
+            requireInteraction: true,
+            silent: false,
+            vibrate: [500, 200, 500, 200, 900],
+            data: {
+              ...data,
+              click_url:
+                data.click_url ||
+                window.location.origin +
+                  "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+            }
+          });
+        });
+      }
+    });
+
     window.jfWebPushGetToken = async function () {
       if (!("Notification" in window) ||
           Notification.permission !== "granted") {
