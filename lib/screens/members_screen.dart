@@ -712,6 +712,7 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
   String? _parentId;
   String? _childId;
   bool _saving = false;
+  bool _changed = false;
 
   @override
   void initState() {
@@ -729,6 +730,22 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
       }
     }
     return 'Unbekannt';
+  }
+
+  List<Map<String, dynamic>> get _sortedLinks {
+    final result = _links.map((e) => Map<String, dynamic>.from(e)).toList();
+    result.sort((a, b) {
+      final parentCompare =
+          _nameById(a['parent_id']?.toString()).toLowerCase().compareTo(
+                _nameById(b['parent_id']?.toString()).toLowerCase(),
+              );
+      if (parentCompare != 0) return parentCompare;
+
+      return _nameById(a['child_id']?.toString()).toLowerCase().compareTo(
+            _nameById(b['child_id']?.toString()).toLowerCase(),
+          );
+    });
+    return result;
   }
 
   Future<void> _add() async {
@@ -755,10 +772,20 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
         'child_id': _childId,
       });
 
+      if (!mounted) return;
+
       setState(() {
         _links.add({'parent_id': _parentId, 'child_id': _childId});
+        _childId = null;
         _saving = false;
+        _changed = true;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Eltern-Kind-Verknüpfung wurde gespeichert.'),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -769,21 +796,65 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
   }
 
   Future<void> _remove(Map<String, dynamic> link) async {
-    await _supabase
-        .from('parent_child')
-        .delete()
-        .eq('parent_id', link['parent_id'])
-        .eq('child_id', link['child_id']);
+    if (_saving) return;
 
-    if (!mounted) return;
+    final parentName = _nameById(link['parent_id']?.toString());
+    final childName = _nameById(link['child_id']?.toString());
 
-    setState(() {
-      _links.removeWhere(
-        (l) =>
-            l['parent_id']?.toString() == link['parent_id']?.toString() &&
-            l['child_id']?.toString() == link['child_id']?.toString(),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Verknüpfung lösen?'),
+        content: Text(
+          'Soll die Verknüpfung zwischen $parentName und $childName '
+          'wirklich entfernt werden?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Entfernen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _saving = true);
+
+    try {
+      await _supabase
+          .from('parent_child')
+          .delete()
+          .eq('parent_id', link['parent_id'])
+          .eq('child_id', link['child_id']);
+
+      if (!mounted) return;
+
+      setState(() {
+        _links.removeWhere(
+          (l) =>
+              l['parent_id']?.toString() == link['parent_id']?.toString() &&
+              l['child_id']?.toString() == link['child_id']?.toString(),
+        );
+        _saving = false;
+        _changed = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verknüpfung wurde entfernt.')),
       );
-    });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Entfernen fehlgeschlagen: $e')),
+      );
+    }
   }
 
   @override
@@ -813,6 +884,37 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
                 style: TextStyle(fontSize: 23, fontWeight: FontWeight.bold),
               ),
             ),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FB),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                '${parents.length} Elternteile · '
+                '${children.length} Jugendmitglieder · '
+                '${_links.length} Verknüpfungen',
+                style: const TextStyle(
+                  color: Color(0xFF0A1F44),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (parents.isEmpty || children.isEmpty) ...[
+              const SizedBox(height: 12),
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('Verknüpfung aktuell nicht möglich'),
+                  subtitle: Text(
+                    'Es muss mindestens ein Elternkonto und ein '
+                    'Jugendmitglied vorhanden sein.',
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             DropdownButtonFormField<String>(
               initialValue: _parentId,
@@ -828,7 +930,9 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) => setState(() => _parentId = value),
+              onChanged: parents.isEmpty
+                  ? null
+                  : (value) => setState(() => _parentId = value),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -845,7 +949,9 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
                     ),
                   )
                   .toList(),
-              onChanged: (value) => setState(() => _childId = value),
+              onChanged: children.isEmpty
+                  ? null
+                  : (value) => setState(() => _childId = value),
             ),
             const SizedBox(height: 14),
             SizedBox(
@@ -872,7 +978,7 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
                 child: ListTile(title: Text('Noch keine Verknüpfungen.')),
               )
             else
-              ..._links.map(
+              ..._sortedLinks.map(
                 (link) => Card(
                   child: ListTile(
                     title: Text(
@@ -880,7 +986,7 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
                       '${_nameById(link['child_id']?.toString())}',
                     ),
                     trailing: IconButton(
-                      onPressed: () => _remove(link),
+                      onPressed: _saving ? null : () => _remove(link),
                       icon: const Icon(Icons.link_off),
                     ),
                   ),
@@ -890,7 +996,7 @@ class _ParentChildManagerState extends State<_ParentChildManager> {
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                onPressed: () => Navigator.pop(context, true),
+                onPressed: () => Navigator.pop(context, _changed),
                 child: const Text('Fertig'),
               ),
             ),
