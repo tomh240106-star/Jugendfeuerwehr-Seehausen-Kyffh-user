@@ -71,53 +71,30 @@ class _MessagesScreenState extends State<MessagesScreen> {
           .order('created_at', ascending: false);
 
       final conversations = List<Map<String, dynamic>>.from(rows);
-      final conversationIds = conversations
-          .map((c) => c['id']?.toString())
-          .whereType<String>()
-          .toList();
-
       final unread = <String, int>{};
       final latest = <String, Map<String, dynamic>>{};
 
-      if (conversationIds.isNotEmpty) {
-        final memberships = await _supabase
-            .from('conversation_members')
-            .select('conversation_id,last_read_at')
-            .eq('user_id', user.id)
-            .inFilter('conversation_id', conversationIds);
+      final overviewRows = await _supabase.rpc(
+        'get_conversation_overview',
+      );
 
-        final lastReadByConversation = <String, DateTime?>{};
-        for (final row in memberships) {
-          final conversationId = row['conversation_id']?.toString();
-          if (conversationId == null) continue;
+      for (final raw in (overviewRows as List<dynamic>)) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final conversationId = row['conversation_id']?.toString();
+        if (conversationId == null || conversationId.isEmpty) continue;
 
-          lastReadByConversation[conversationId] =
-              DateTime.tryParse(row['last_read_at']?.toString() ?? '');
-        }
+        final unreadValue = row['unread_count'];
+        unread[conversationId] = unreadValue is num
+            ? unreadValue.toInt()
+            : int.tryParse(unreadValue?.toString() ?? '') ?? 0;
 
-        final messageRows = await _supabase
-            .from('messages')
-            .select('conversation_id,sender_id,body,created_at')
-            .inFilter('conversation_id', conversationIds)
-            .order('created_at', ascending: true);
-
-        for (final raw in messageRows) {
-          final message = Map<String, dynamic>.from(raw);
-          final conversationId = message['conversation_id']?.toString();
-          if (conversationId == null) continue;
-
-          latest[conversationId] = message;
-
-          if (message['sender_id']?.toString() == user.id) continue;
-
-          final createdAt =
-              DateTime.tryParse(message['created_at']?.toString() ?? '');
-          final lastRead = lastReadByConversation[conversationId];
-
-          if (createdAt != null &&
-              (lastRead == null || createdAt.isAfter(lastRead))) {
-            unread[conversationId] = (unread[conversationId] ?? 0) + 1;
-          }
+        final latestCreatedAt = row['latest_created_at']?.toString();
+        if (latestCreatedAt != null && latestCreatedAt.isNotEmpty) {
+          latest[conversationId] = {
+            'conversation_id': conversationId,
+            'body': row['latest_body'],
+            'created_at': latestCreatedAt,
+          };
         }
       }
 

@@ -88,45 +88,13 @@ class _HomeShellState extends State<HomeShell> {
     if (user == null) return;
 
     try {
-      final memberships = await Supabase.instance.client
-          .from('conversation_members')
-          .select('conversation_id,last_read_at')
-          .eq('user_id', user.id);
+      final unreadResult = await Supabase.instance.client.rpc(
+        'get_unread_message_count',
+      );
 
-      final lastReadByConversation = <String, DateTime?>{};
-      final conversationIds = <String>[];
-
-      for (final row in memberships) {
-        final conversationId = row['conversation_id']?.toString();
-        if (conversationId == null || conversationId.isEmpty) continue;
-
-        conversationIds.add(conversationId);
-        lastReadByConversation[conversationId] =
-            DateTime.tryParse(row['last_read_at']?.toString() ?? '');
-      }
-
-      var unreadMessages = 0;
-
-      if (conversationIds.isNotEmpty) {
-        final messageRows = await Supabase.instance.client
-            .from('messages')
-            .select('conversation_id,sender_id,created_at')
-            .inFilter('conversation_id', conversationIds);
-
-        for (final row in messageRows) {
-          if (row['sender_id']?.toString() == user.id) continue;
-
-          final conversationId = row['conversation_id']?.toString();
-          final createdAt =
-              DateTime.tryParse(row['created_at']?.toString() ?? '');
-          if (conversationId == null || createdAt == null) continue;
-
-          final lastRead = lastReadByConversation[conversationId];
-          if (lastRead == null || createdAt.isAfter(lastRead)) {
-            unreadMessages++;
-          }
-        }
-      }
+      final unreadMessages = unreadResult is num
+          ? unreadResult.toInt()
+          : int.tryParse(unreadResult?.toString() ?? '') ?? 0;
 
       final documentRows =
           await Supabase.instance.client.from('documents').select('id');
