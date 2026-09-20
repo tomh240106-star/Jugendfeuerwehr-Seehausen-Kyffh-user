@@ -376,18 +376,44 @@ class _EventsScreenState extends State<EventsScreen> {
     Map<String, dynamic> event,
   ) async {
     try {
-      final rows = await _supabase
+      final profiles = await _supabase
+          .from('profiles')
+          .select('id,first_name,last_name,role')
+          .eq('role', 'jugendmitglied')
+          .order('last_name')
+          .order('first_name');
+
+      final attendanceRows = await _supabase
           .from('event_attendance')
-          .select(
-            'status,user_id,profiles!event_attendance_user_id_fkey(first_name,last_name,role)',
-          )
+          .select('status,user_id')
           .eq('event_id', event['id']);
 
-      final data = List<Map<String, dynamic>>.from(rows);
+      final attendanceByUser = <String, String>{};
+      for (final row in attendanceRows) {
+        final userId = row['user_id']?.toString();
+        final status = row['status']?.toString();
+        if (userId != null && status != null) {
+          attendanceByUser[userId] = status;
+        }
+      }
+
+      final data = <Map<String, dynamic>>[];
+      for (final profileRaw in profiles) {
+        final profile = Map<String, dynamic>.from(profileRaw);
+        final userId = profile['id']?.toString() ?? '';
+        data.add({
+          'user_id': userId,
+          'status': attendanceByUser[userId] ?? 'offen',
+          'profiles': profile,
+        });
+      }
 
       int countFor(String status) {
         return data.where((row) => row['status']?.toString() == status).length;
       }
+
+      final answered =
+          data.where((row) => row['status']?.toString() != 'offen').length;
 
       if (!mounted) return;
 
@@ -409,17 +435,38 @@ class _EventsScreenState extends State<EventsScreen> {
             grouped[status]!.add(row);
           }
 
+          for (final entries in grouped.values) {
+            entries.sort((a, b) {
+              final pa = a['profiles'] as Map<String, dynamic>?;
+              final pb = b['profiles'] as Map<String, dynamic>?;
+              final aName =
+                  '${pa?['last_name'] ?? ''} ${pa?['first_name'] ?? ''}'
+                      .trim()
+                      .toLowerCase();
+              final bName =
+                  '${pb?['last_name'] ?? ''} ${pb?['first_name'] ?? ''}'
+                      .trim()
+                      .toLowerCase();
+              return aName.compareTo(bName);
+            });
+          }
+
           Widget section(
             String title,
             String status,
             IconData icon,
+            Color color,
           ) {
             final entries = grouped[status] ?? const <Map<String, dynamic>>[];
 
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ExpansionTile(
-                leading: Icon(icon),
+                initiallyExpanded: status == 'offen' && entries.isNotEmpty,
+                leading: CircleAvatar(
+                  backgroundColor: color.withValues(alpha: 0.12),
+                  child: Icon(icon, color: color),
+                ),
                 title: Text(
                   '$title (${entries.length})',
                   style: const TextStyle(
@@ -442,29 +489,20 @@ class _EventsScreenState extends State<EventsScreen> {
                             profile?['last_name']?.toString().trim() ?? '';
 
                         final name = '$firstName $lastName'.trim();
-
-                        final displayName = name.isEmpty
-                            ? row['user_id']?.toString() ?? 'Unbekannt'
-                            : name;
-
-                        final role = profile?['role']?.toString();
+                        final displayName =
+                            name.isEmpty ? 'Jugendmitglied' : name;
 
                         return ListTile(
-                          leading: const CircleAvatar(
-                            child: Icon(Icons.person),
+                          leading: CircleAvatar(
+                            backgroundColor: color.withValues(alpha: 0.12),
+                            child: Icon(Icons.person, color: color),
                           ),
                           title: Text(displayName),
-                          subtitle: role == null
-                              ? null
-                              : Text(
-                                  role == 'ausbilder'
-                                      ? 'Ausbilder'
-                                      : role == 'eltern'
-                                          ? 'Eltern'
-                                          : role == 'jugendmitglied'
-                                              ? 'Jugendmitglied'
-                                              : role,
-                                ),
+                          subtitle: Text(
+                            status == 'offen'
+                                ? 'Noch keine Rückmeldung'
+                                : _attendanceLabel(status),
+                          ),
                         );
                       }).toList(),
               ),
@@ -485,7 +523,16 @@ class _EventsScreenState extends State<EventsScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Gesamt: ${data.length} Rückmeldungen',
+                  '$answered von ${data.length} Jugendmitgliedern haben geantwortet',
+                  style: const TextStyle(
+                    color: Color(0xFF667085),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                LinearProgressIndicator(
+                  value: data.isEmpty ? 0 : answered / data.length,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 const SizedBox(height: 18),
                 Row(
@@ -532,21 +579,25 @@ class _EventsScreenState extends State<EventsScreen> {
                   'Zugesagt',
                   'zugesagt',
                   Icons.check_circle,
+                  const Color(0xFF16A34A),
                 ),
                 section(
                   'Abgesagt',
                   'abgesagt',
                   Icons.cancel,
+                  const Color(0xFFE30613),
                 ),
                 section(
-                  'Vielleicht / offen',
+                  'Noch offen',
                   'offen',
                   Icons.help_outline,
+                  const Color(0xFF8A95A5),
                 ),
                 section(
                   'Entschuldigt',
                   'entschuldigt',
                   Icons.info,
+                  const Color(0xFFFF8A00),
                 ),
               ],
             ),
