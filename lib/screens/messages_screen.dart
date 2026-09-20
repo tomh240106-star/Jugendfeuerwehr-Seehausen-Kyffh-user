@@ -15,6 +15,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
   bool _isTrainer = false;
   String? _error;
   List<Map<String, dynamic>> _conversations = [];
+  final Map<String, int> _unreadByConversation = {};
+  final Map<String, Map<String, dynamic>> _latestByConversation = {};
 
   @override
   void initState() {
@@ -56,15 +58,97 @@ class _MessagesScreenState extends State<MessagesScreen> {
     }
 
     try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('Kein Benutzer angemeldet.');
+      }
+
       final rows = await _supabase
           .from('conversations')
           .select()
           .order('created_at', ascending: false);
 
+      final conversations = List<Map<String, dynamic>>.from(rows);
+      final conversationIds = conversations
+          .map((c) => c['id']?.toString())
+          .whereType<String>()
+          .toList();
+
+      final unread = <String, int>{};
+      final latest = <String, Map<String, dynamic>>{};
+
+      if (conversationIds.isNotEmpty) {
+        final memberships = await _supabase
+            .from('conversation_members')
+            .select('conversation_id,last_read_at')
+            .eq('user_id', user.id)
+            .inFilter('conversation_id', conversationIds);
+
+        final lastReadByConversation = <String, DateTime?>{};
+        for (final row in memberships) {
+          final conversationId = row['conversation_id']?.toString();
+          if (conversationId == null) continue;
+
+          lastReadByConversation[conversationId] =
+              DateTime.tryParse(row['last_read_at']?.toString() ?? '');
+        }
+
+        final messageRows = await _supabase
+            .from('messages')
+            .select('conversation_id,sender_id,body,created_at')
+            .inFilter('conversation_id', conversationIds)
+            .order('created_at', ascending: true);
+
+        for (final raw in messageRows) {
+          final message = Map<String, dynamic>.from(raw);
+          final conversationId = message['conversation_id']?.toString();
+          if (conversationId == null) continue;
+
+          latest[conversationId] = message;
+
+          if (message['sender_id']?.toString() == user.id) continue;
+
+          final createdAt =
+              DateTime.tryParse(message['created_at']?.toString() ?? '');
+          final lastRead = lastReadByConversation[conversationId];
+
+          if (createdAt != null &&
+              (lastRead == null || createdAt.isAfter(lastRead))) {
+            unread[conversationId] = (unread[conversationId] ?? 0) + 1;
+          }
+        }
+      }
+
+      conversations.sort((a, b) {
+        DateTime? sortDate(Map<String, dynamic> conversation) {
+          final id = conversation['id']?.toString();
+          final message = id == null ? null : latest[id];
+
+          return DateTime.tryParse(
+                message?['created_at']?.toString() ?? '',
+              ) ??
+              DateTime.tryParse(conversation['created_at']?.toString() ?? '');
+        }
+
+        final aDate = sortDate(a);
+        final bDate = sortDate(b);
+
+        if (aDate == null && bDate == null) return 0;
+        if (aDate == null) return 1;
+        if (bDate == null) return -1;
+        return bDate.compareTo(aDate);
+      });
+
       if (!mounted) return;
 
       setState(() {
-        _conversations = List<Map<String, dynamic>>.from(rows);
+        _conversations = conversations;
+        _unreadByConversation
+          ..clear()
+          ..addAll(unread);
+        _latestByConversation
+          ..clear()
+          ..addAll(latest);
         _loading = false;
       });
     } catch (e) {
@@ -75,6 +159,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
         _error = e.toString();
       });
     }
+  }
+
+  String _messagePreview(Map<String, dynamic>? message) {
+    if (message == null) return 'Noch keine Nachrichten';
+
+    final text =
+        message['body']?.toString().replaceAll(RegExp(r'\s+'), ' ').trim() ??
+            '';
+    if (text.isEmpty) return 'Neue Nachricht';
+    return text.length > 70 ? '${text.substring(0, 67)}...' : text;
   }
 
   String _scopeLabel(dynamic scope) {
@@ -280,6 +374,11 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             : 'Unterhaltung';
 
                         final scope = conversation['scope']?.toString();
+                        final conversationId =
+                            conversation['id']?.toString() ?? '';
+                        final unread =
+                            _unreadByConversation[conversationId] ?? 0;
+                        final latest = _latestByConversation[conversationId];
 
                         IconData icon;
                         Color accent;
@@ -339,17 +438,66 @@ class _MessagesScreenState extends State<MessagesScreen> {
                             ),
                             subtitle: Padding(
                               padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                _scopeLabel(scope),
-                                style: const TextStyle(
-                                  color: Color(0xFF667085),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _scopeLabel(scope),
+                                    style: const TextStyle(
+                                      color: Color(0xFF667085),
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _messagePreview(latest),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: unread > 0
+                                          ? navy
+                                          : const Color(0xFF98A2B3),
+                                      fontWeight: unread > 0
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            trailing: const Icon(
-                              Icons.chevron_right,
-                              color: Color(0xFF7E8996),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (unread > 0)
+                                  Container(
+                                    constraints: const BoxConstraints(
+                                      minWidth: 26,
+                                      minHeight: 26,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: red,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      unread > 99 ? '99+' : unread.toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                if (unread > 0) const SizedBox(width: 6),
+                                const Icon(
+                                  Icons.chevron_right,
+                                  color: Color(0xFF7E8996),
+                                ),
+                              ],
                             ),
                             onTap: () {
                               Navigator.of(context)
