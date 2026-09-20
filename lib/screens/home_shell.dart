@@ -1124,6 +1124,19 @@ class _MoreScreenState extends State<_MoreScreen> {
                           );
                         },
                       ),
+                    if (_profile?['role'] == 'eltern')
+                      _MoreTile(
+                        icon: Icons.family_restroom,
+                        title: 'Meine Kinder',
+                        subtitle: 'Verknüpfte Jugendmitglieder und Termine',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const _ParentAreaScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     _MoreTile(
                       icon: Icons.person_outline,
                       title: 'Mein Profil',
@@ -1415,6 +1428,403 @@ class _MoreTile extends StatelessWidget {
         color: Color(0xFF98A2B3),
       ),
       onTap: onTap,
+    );
+  }
+}
+
+class _ParentAreaScreen extends StatefulWidget {
+  const _ParentAreaScreen();
+
+  @override
+  State<_ParentAreaScreen> createState() => _ParentAreaScreenState();
+}
+
+class _ParentAreaScreenState extends State<_ParentAreaScreen> {
+  static const _navy = Color(0xFF0A1F44);
+  static const _blue = Color(0xFF0B4EA2);
+  static const _green = Color(0xFF13A05B);
+  static const _red = Color(0xFFE30613);
+
+  final _supabase = Supabase.instance.client;
+
+  bool _loading = true;
+  String? _error;
+  List<Map<String, dynamic>> _children = [];
+  List<Map<String, dynamic>> _events = [];
+  List<Map<String, dynamic>> _attendance = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+
+      final links = await _supabase
+          .from('parent_child')
+          .select('child_id')
+          .eq('parent_id', user.id);
+
+      final childIds = links
+          .map((row) => row['child_id']?.toString())
+          .whereType<String>()
+          .toList();
+
+      List<Map<String, dynamic>> children = [];
+      List<Map<String, dynamic>> attendance = [];
+
+      if (childIds.isNotEmpty) {
+        final childRows = await _supabase
+            .from('profiles')
+            .select('id,first_name,last_name,phone,role')
+            .inFilter('id', childIds)
+            .order('last_name')
+            .order('first_name');
+
+        children = List<Map<String, dynamic>>.from(childRows);
+
+        final attendanceRows = await _supabase
+            .from('event_attendance')
+            .select('event_id,user_id,status')
+            .inFilter('user_id', childIds);
+
+        attendance = List<Map<String, dynamic>>.from(attendanceRows);
+      }
+
+      final eventRows = await _supabase
+          .from('events')
+          .select('id,title,starts_at,location')
+          .gte('starts_at', DateTime.now().toUtc().toIso8601String())
+          .order('starts_at')
+          .limit(5);
+
+      if (!mounted) return;
+
+      setState(() {
+        _children = children;
+        _attendance = attendance;
+        _events = List<Map<String, dynamic>>.from(eventRows);
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.toString();
+      });
+    }
+  }
+
+  String _name(Map<String, dynamic> child) {
+    final first = child['first_name']?.toString().trim() ?? '';
+    final last = child['last_name']?.toString().trim() ?? '';
+    final value = '$first $last'.trim();
+    return value.isEmpty ? 'Jugendmitglied' : value;
+  }
+
+  String _eventDate(dynamic value) {
+    final dt = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (dt == null) return 'Kein Datum';
+
+    return '${dt.day.toString().padLeft(2, '0')}.'
+        '${dt.month.toString().padLeft(2, '0')}.'
+        '${dt.year} · '
+        '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')} Uhr';
+  }
+
+  String _attendanceFor(String childId, String eventId) {
+    for (final row in _attendance) {
+      if (row['user_id']?.toString() == childId &&
+          row['event_id']?.toString() == eventId) {
+        switch (row['status']?.toString()) {
+          case 'zugesagt':
+            return 'Zugesagt';
+          case 'abgesagt':
+            return 'Abgesagt';
+          case 'entschuldigt':
+            return 'Entschuldigt';
+          case 'offen':
+            return 'Offen';
+        }
+      }
+    }
+    return 'Offen';
+  }
+
+  Color _attendanceColor(String value) {
+    switch (value) {
+      case 'Zugesagt':
+        return _green;
+      case 'Abgesagt':
+        return _red;
+      case 'Entschuldigt':
+        return const Color(0xFFFF7A00);
+      default:
+        return const Color(0xFF667085);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF3F5F7),
+      appBar: AppBar(
+        title: const Text('Meine Kinder'),
+        backgroundColor: _navy,
+        foregroundColor: Colors.white,
+      ),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: _loading
+            ? ListView(
+                children: const [
+                  SizedBox(height: 220),
+                  Center(child: CircularProgressIndicator()),
+                ],
+              )
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (_error != null)
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFE6E8),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        'Elternbereich konnte nicht geladen werden.\n$_error',
+                        style: const TextStyle(color: _red),
+                      ),
+                    ),
+                  if (_error == null && _children.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(22),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: const Color(0xFFE3E8EE),
+                        ),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(
+                            Icons.family_restroom,
+                            size: 54,
+                            color: _blue,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Noch kein Jugendmitglied verknüpft',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: _navy,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            'Die Verknüpfung kann durch einen Ausbilder in der Mitgliederverwaltung vorgenommen werden.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF667085),
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (_error == null && _children.isNotEmpty) ...[
+                    const Text(
+                      'Verknüpfte Jugendmitglieder',
+                      style: TextStyle(
+                        color: _navy,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    ..._children.map(
+                      (child) => Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFFE3E8EE),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const CircleAvatar(
+                              backgroundColor: Color(0xFFEAF2FB),
+                              child: Icon(
+                                Icons.person,
+                                color: _blue,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _name(child),
+                                    style: const TextStyle(
+                                      color: _navy,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if ((child['phone'] ?? '')
+                                      .toString()
+                                      .trim()
+                                      .isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      child['phone'].toString(),
+                                      style: const TextStyle(
+                                        color: Color(0xFF667085),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Nächste Termine',
+                      style: TextStyle(
+                        color: _navy,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    if (_events.isEmpty)
+                      const Card(
+                        child: ListTile(
+                          leading: Icon(Icons.event_busy_outlined),
+                          title: Text('Keine zukünftigen Termine eingetragen.'),
+                        ),
+                      )
+                    else
+                      ..._events.map((event) {
+                        final eventId = event['id']?.toString() ?? '';
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: const Color(0xFFE3E8EE),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                event['title']?.toString() ?? 'Termin',
+                                style: const TextStyle(
+                                  color: _navy,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _eventDate(event['starts_at']),
+                                style: const TextStyle(
+                                  color: Color(0xFF667085),
+                                ),
+                              ),
+                              if ((event['location'] ?? '')
+                                  .toString()
+                                  .trim()
+                                  .isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  event['location'].toString(),
+                                  style: const TextStyle(
+                                    color: Color(0xFF667085),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 12),
+                              ..._children.map((child) {
+                                final childId = child['id']?.toString() ?? '';
+                                final status = _attendanceFor(childId, eventId);
+
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _name(child),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 5,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _attendanceColor(status)
+                                              .withValues(alpha: 0.12),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: TextStyle(
+                                            color: _attendanceColor(status),
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        );
+                      }),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Teilnahme kann hier nur eingesehen werden. Rückmeldungen werden weiterhin durch das Jugendmitglied selbst bzw. durch Ausbilder verwaltet.',
+                      style: TextStyle(
+                        color: Color(0xFF667085),
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+      ),
     );
   }
 }
