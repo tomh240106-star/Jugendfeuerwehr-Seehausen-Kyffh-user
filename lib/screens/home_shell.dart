@@ -1285,7 +1285,42 @@ class _MoreScreenState extends State<_MoreScreen> {
                 ),
                 const SizedBox(height: 18),
                 _MoreSection(
-                  title: 'Verwaltung',
+                  title: 'Mein Bereich',
+                  children: [
+                    _MoreTile(
+                      icon: Icons.person_outline,
+                      title: 'Mein Profil',
+                      subtitle: 'Persönliche Daten und Einstellungen',
+                      onTap: _openProfile,
+                    ),
+                    if (_profile?['role'] == 'eltern')
+                      _MoreTile(
+                        icon: Icons.family_restroom,
+                        title: 'Meine Kinder',
+                        subtitle: 'Verknüpfte Jugendmitglieder und Termine',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const _ParentAreaScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    _MoreTile(
+                      icon: _profile?['notifications_enabled'] == false
+                          ? Icons.notifications_off_outlined
+                          : Icons.notifications_active_outlined,
+                      title: 'Benachrichtigungen',
+                      subtitle: _profile?['notifications_enabled'] == false
+                          ? 'Push-Benachrichtigungen sind ausgeschaltet'
+                          : 'Push-Benachrichtigungen sind eingeschaltet',
+                      onTap: _openProfile,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _MoreSection(
+                  title: 'Jugendfeuerwehr',
                   children: [
                     if (_canUseAlarm)
                       _MoreTile(
@@ -1302,25 +1337,6 @@ class _MoreScreenState extends State<_MoreScreen> {
                           );
                         },
                       ),
-                    if (_profile?['role'] == 'eltern')
-                      _MoreTile(
-                        icon: Icons.family_restroom,
-                        title: 'Meine Kinder',
-                        subtitle: 'Verknüpfte Jugendmitglieder und Termine',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const _ParentAreaScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    _MoreTile(
-                      icon: Icons.person_outline,
-                      title: 'Mein Profil',
-                      subtitle: 'Persönliche Daten bearbeiten',
-                      onTap: _openProfile,
-                    ),
                     _MoreTile(
                       icon: Icons.school_outlined,
                       title: 'Ausbildungspläne',
@@ -1329,44 +1345,6 @@ class _MoreScreenState extends State<_MoreScreen> {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => const TrainingPlansScreen(),
-                          ),
-                        );
-                      },
-                    ),
-                    _MoreTile(
-                      icon: _profile?['notifications_enabled'] == false
-                          ? Icons.notifications_off_outlined
-                          : Icons.notifications_active_outlined,
-                      title: 'Benachrichtigungen',
-                      subtitle: _profile?['notifications_enabled'] == false
-                          ? 'Push-Benachrichtigungen sind ausgeschaltet'
-                          : 'Push-Benachrichtigungen sind eingeschaltet',
-                      onTap: _openProfile,
-                    ),
-                    _MoreTile(
-                      icon: Icons.privacy_tip_outlined,
-                      title: 'Datenschutz',
-                      subtitle: 'Hinweise zur Datenverarbeitung',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const LegalScreen(
-                              initialSection: LegalSection.datenschutz,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    _MoreTile(
-                      icon: Icons.info_outline,
-                      title: 'Kontakt & Verantwortliche Stelle',
-                      subtitle: 'Interne verantwortliche Stelle',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const LegalScreen(
-                              initialSection: LegalSection.kontakt,
-                            ),
                           ),
                         );
                       },
@@ -1388,7 +1366,7 @@ class _MoreScreenState extends State<_MoreScreen> {
                 ),
                 const SizedBox(height: 18),
                 _MoreSection(
-                  title: 'Informationen',
+                  title: 'Informationen & Rechtliches',
                   children: [
                     _MoreTile(
                       icon: Icons.info_outline,
@@ -1409,19 +1387,8 @@ class _MoreScreenState extends State<_MoreScreen> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const _LegalTextScreen(
-                              title: 'Datenschutz',
-                              icon: Icons.privacy_tip_outlined,
-                              intro:
-                                  'Hier werden die Datenschutzhinweise der Jugendfeuerwehr hinterlegt.',
-                              sections: [
-                                'Verantwortliche Stelle',
-                                'Verarbeitete Daten',
-                                'Zwecke der Verarbeitung',
-                                'Speicherdauer',
-                                'Rechte der betroffenen Personen',
-                                'Kontakt',
-                              ],
+                            builder: (_) => const LegalScreen(
+                              initialSection: LegalSection.datenschutz,
                             ),
                           ),
                         );
@@ -1434,18 +1401,8 @@ class _MoreScreenState extends State<_MoreScreen> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const _LegalTextScreen(
-                              title: 'Kontakt & Verantwortliche Stelle',
-                              icon: Icons.gavel_outlined,
-                              intro:
-                                  'Hier werden die rechtlich erforderlichen Anbieterangaben eingetragen.',
-                              sections: [
-                                'Träger / Organisation',
-                                'Anschrift',
-                                'Vertretungsberechtigte Person',
-                                'Kontakt',
-                                'Haftungshinweise',
-                              ],
+                            builder: (_) => const LegalScreen(
+                              initialSection: LegalSection.kontakt,
                             ),
                           ),
                         );
@@ -2384,105 +2341,6 @@ class _InfoBox extends StatelessWidget {
             text,
             style: const TextStyle(
               color: Color(0xFF667085),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegalTextScreen extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final String intro;
-  final List<String> sections;
-
-  const _LegalTextScreen({
-    required this.title,
-    required this.icon,
-    required this.intro,
-    required this.sections,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(18),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: const Color(0xFFE3E8EE),
-              ),
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  icon,
-                  size: 46,
-                  color: const Color(0xFF0B4EA2),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  intro,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFF667085),
-                    height: 1.4,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          ...sections.map(
-            (section) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(17),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: const Color(0xFFE3E8EE),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.circle,
-                    size: 8,
-                    color: Color(0xFFE30613),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      section,
-                      style: const TextStyle(
-                        color: Color(0xFF0A1F44),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Hinweis: Die konkreten rechtlichen Angaben müssen vor einer öffentlichen Veröffentlichung mit den tatsächlichen Daten der verantwortlichen Organisation ergänzt werden.',
-            style: TextStyle(
-              color: Color(0xFF667085),
-              fontSize: 12,
               height: 1.4,
             ),
           ),
