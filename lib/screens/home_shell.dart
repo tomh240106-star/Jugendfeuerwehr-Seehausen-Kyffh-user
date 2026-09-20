@@ -631,6 +631,7 @@ class _HeroHeader extends StatelessWidget {
                           );
 
                           if (confirmed == true) {
+                            await PushService.unregisterCurrentDevice();
                             await Supabase.instance.client.auth.signOut();
                           }
                         },
@@ -1289,6 +1290,7 @@ class _MoreScreenState extends State<_MoreScreen> {
                       );
 
                       if (confirmed == true) {
+                        await PushService.unregisterCurrentDevice();
                         await _supabase.auth.signOut();
                       }
                     },
@@ -1649,6 +1651,26 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
                     ),
                   ),
                 ],
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final sent = await PushService.sendTestNotification();
+
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          sent
+                              ? 'Test-Benachrichtigung wurde gesendet.'
+                              : 'Test-Benachrichtigung konnte nicht gesendet werden. Bitte Benachrichtigungen auf diesem Gerät zuerst aktivieren.',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('Test-Benachrichtigung senden'),
+                ),
                 const SizedBox(height: 18),
                 FilledButton.icon(
                   onPressed: _saving ? null : _save,

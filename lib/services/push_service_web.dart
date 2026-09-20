@@ -71,5 +71,42 @@ class PushService {
     );
   }
 
+  static Future<void> unregisterCurrentDevice() async {
+    try {
+      final token = (await _getWebPushToken().toDart).toDart.trim();
+      if (token.isEmpty) return;
+
+      await Supabase.instance.client.rpc(
+        'release_device_token',
+        params: {'p_token': token},
+      );
+    } catch (_) {}
+  }
+
+  static Future<bool> sendTestNotification() async {
+    try {
+      final response = await Supabase.instance.client.functions.invoke(
+        'send-push',
+        body: {
+          'title': 'Jugendfeuerwehr Test',
+          'body': 'Benachrichtigungen funktionieren auf diesem Gerät.',
+          'self_test': true,
+        },
+      );
+
+      if (response.status >= 400) return false;
+
+      final data = response.data;
+      if (data is Map) {
+        final sent = data['sent'];
+        if (sent is num) return sent > 0;
+      }
+
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<void> cancelAlarmNotification(String alarmId) async {}
 }
