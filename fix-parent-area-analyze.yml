@@ -1,0 +1,90 @@
+name: Fix Parent Area Analyze
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-parent-area-analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Fix non-const ListView
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/screens/home_shell.dart")
+          s = p.read_text(encoding="utf-8")
+
+          old = '''        child: _loading
+              ? const ListView(
+                  children: [
+                    SizedBox(height: 220),
+                    Center(child: CircularProgressIndicator()),
+                  ],
+                )
+          '''
+
+          new = '''        child: _loading
+              ? ListView(
+                  children: const [
+                    SizedBox(height: 220),
+                    Center(child: CircularProgressIndicator()),
+                  ],
+                )
+          '''
+
+          if old not in s:
+              raise SystemExit("Parent-Area Ladeblock wurde nicht gefunden.")
+
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding="utf-8")
+          print("Const-Fehler im Elternbereich behoben.")
+          PY
+
+      - name: Format
+        run: dart format lib/screens/home_shell.dart
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/home_shell.dart
+
+          if git diff --cached --quiet; then
+            echo "Keine Änderungen nötig."
+            exit 0
+          fi
+
+          git commit -m "Fix parent area const ListView"
+          git push origin main
