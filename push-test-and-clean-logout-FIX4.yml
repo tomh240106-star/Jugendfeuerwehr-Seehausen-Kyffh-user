@@ -1,0 +1,246 @@
+name: Push Test And Clean Logout
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  push-cleanup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Update native push service
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/services/push_service_native.dart")
+          s = p.read_text(encoding="utf-8")
+
+          if "static Future<void> unregisterCurrentDevice()" not in s:
+              marker = "  static Future<void> cancelAlarmNotification(String alarmId) async {"
+              idx = s.find(marker)
+              if idx < 0:
+                  raise SystemExit("cancelAlarmNotification nicht gefunden")
+
+              methods = '''  static Future<void> unregisterCurrentDevice() async {
+            try {
+              final token = await _messaging.getToken();
+              if (token == null || token.isEmpty) return;
+
+              await Supabase.instance.client.rpc(
+                'release_device_token',
+                params: {'p_token': token},
+              );
+            } catch (error) {
+              debugPrint(
+                'Geräte-Token konnte beim Abmelden nicht entfernt werden: $error',
+              );
+            }
+          }
+
+          static Future<bool> sendTestNotification() async {
+            try {
+              final response = await Supabase.instance.client.functions.invoke(
+                'send-push',
+                body: {
+                  'title': 'Jugendfeuerwehr Test',
+                  'body': 'Benachrichtigungen funktionieren auf diesem Gerät.',
+                  'self_test': true,
+                },
+              );
+
+              if (response.status >= 400) return false;
+
+              final data = response.data;
+              if (data is Map) {
+                final sent = data['sent'];
+                if (sent is num) return sent > 0;
+              }
+
+              return true;
+            } catch (error) {
+              debugPrint('Test-Benachrichtigung fehlgeschlagen: $error');
+              return false;
+            }
+          }
+
+          '''
+              s = s[:idx] + methods + s[idx:]
+
+          p.write_text(s, encoding="utf-8")
+          PY
+
+      - name: Update web push service
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/services/push_service_web.dart")
+          s = p.read_text(encoding="utf-8")
+
+          if "static Future<void> unregisterCurrentDevice()" not in s:
+              marker = "  static Future<void> cancelAlarmNotification(String alarmId) async {}"
+              idx = s.find(marker)
+              if idx < 0:
+                  raise SystemExit("cancelAlarmNotification web nicht gefunden")
+
+              methods = '''  static Future<void> unregisterCurrentDevice() async {
+            try {
+              final token = (await _getWebPushToken().toDart).toDart.trim();
+              if (token.isEmpty) return;
+
+              await Supabase.instance.client.rpc(
+                'release_device_token',
+                params: {'p_token': token},
+              );
+            } catch (_) {}
+          }
+
+          static Future<bool> sendTestNotification() async {
+            try {
+              final response = await Supabase.instance.client.functions.invoke(
+                'send-push',
+                body: {
+                  'title': 'Jugendfeuerwehr Test',
+                  'body': 'Benachrichtigungen funktionieren auf diesem Gerät.',
+                  'self_test': true,
+                },
+              );
+
+              if (response.status >= 400) return false;
+
+              final data = response.data;
+              if (data is Map) {
+                final sent = data['sent'];
+                if (sent is num) return sent > 0;
+              }
+
+              return true;
+            } catch (_) {
+              return false;
+            }
+          }
+
+          '''
+              s = s[:idx] + methods + s[idx:]
+
+          p.write_text(s, encoding="utf-8")
+          PY
+
+      - name: Update logout actions and profile button
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("lib/screens/home_shell.dart")
+          s = p.read_text(encoding="utf-8")
+
+          if "PushService.unregisterCurrentDevice();" not in s:
+              s = s.replace(
+                  "await Supabase.instance.client.auth.signOut();",
+                  "await PushService.unregisterCurrentDevice();\n"
+                  "                            await Supabase.instance.client.auth.signOut();",
+                  1,
+              )
+              s = s.replace(
+                  "await _supabase.auth.signOut();",
+                  "await PushService.unregisterCurrentDevice();\n"
+                  "                        await _supabase.auth.signOut();",
+                  1,
+              )
+
+          if "Test-Benachrichtigung senden" not in s:
+              marker = "label: const Text('Profil speichern')"
+              label_idx = s.find(marker)
+              if label_idx < 0:
+                  raise SystemExit("Profil speichern nicht gefunden")
+
+              insert_idx = s.rfind("                const SizedBox(height: 18),", 0, label_idx)
+              if insert_idx < 0:
+                  raise SystemExit("Einfügestelle nicht gefunden")
+
+              block = '''                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final sent = await PushService.sendTestNotification();
+
+                    if (!context.mounted) return;
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          sent
+                              ? 'Test-Benachrichtigung wurde gesendet.'
+                              : 'Test-Benachrichtigung konnte nicht gesendet werden. Bitte Benachrichtigungen auf diesem Gerät zuerst aktivieren.',
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('Test-Benachrichtigung senden'),
+                ),
+          '''
+              s = s[:insert_idx] + block + s[insert_idx:]
+
+          p.write_text(s, encoding="utf-8")
+          PY
+
+      - name: Format
+        run: dart format lib/services/push_service_native.dart lib/services/push_service_web.dart lib/screens/home_shell.dart
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify changes
+        run: |
+          grep -q "unregisterCurrentDevice" lib/services/push_service_native.dart
+          grep -q "unregisterCurrentDevice" lib/services/push_service_web.dart
+          grep -q "sendTestNotification" lib/services/push_service_native.dart
+          grep -q "sendTestNotification" lib/services/push_service_web.dart
+          grep -q "Test-Benachrichtigung senden" lib/screens/home_shell.dart
+
+      - name: Commit changes
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add lib/services/push_service_native.dart
+          git add lib/services/push_service_web.dart
+          git add lib/screens/home_shell.dart
+
+          if git diff --cached --quiet; then
+            echo "Keine Änderungen nötig."
+            exit 0
+          fi
+
+          git commit -m "Add push test and clean device logout"
+          git push origin main
