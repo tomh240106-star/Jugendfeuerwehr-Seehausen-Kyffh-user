@@ -193,23 +193,27 @@
         return;
       }
 
-      if (source !== "jf_alarm") return;
+      const isAlarm = source === "jf_alarm";
 
-      window.jfWebAlarmStart(
-        data.alarm_id || "active",
-        data.title || "JUGENDFEUERWEHR-ALARM",
-        data.body || "Alarm öffnen und Rückmeldung geben."
-      );
+      if (isAlarm) {
+        window.jfWebAlarmStart(
+          data.alarm_id || "active",
+          data.title || "JUGENDFEUERWEHR-ALARM",
+          data.body || "Alarm öffnen und Rückmeldung geben."
+        );
+      }
 
       const title =
         data.title ||
         payload?.notification?.title ||
-        "JUGENDFEUERWEHR-ALARM";
+        (isAlarm ? "JUGENDFEUERWEHR-ALARM" : "Jugendfeuerwehr");
 
       const body =
         data.body ||
         payload?.notification?.body ||
-        "Alarm öffnen und Rückmeldung geben.";
+        (isAlarm
+          ? "Alarm öffnen und Rückmeldung geben."
+          : "Neue Benachrichtigung");
 
       if (Notification.permission === "granted") {
         jfGetPushRegistration().then((registration) => {
@@ -217,11 +221,15 @@
             body,
             icon: data.icon_url || "icons/Icon-192.png",
             badge: data.icon_url || "icons/Icon-192.png",
-            tag: `jf-alarm-${data.alarm_id || "active"}`,
-            renotify: true,
-            requireInteraction: true,
+            tag: isAlarm
+              ? `jf-alarm-${data.alarm_id || "active"}`
+              : `jf-general-${Date.now()}`,
+            renotify: isAlarm,
+            requireInteraction: isAlarm,
             silent: false,
-            vibrate: [500, 200, 500, 200, 900],
+            vibrate: isAlarm
+              ? [500, 200, 500, 200, 900]
+              : [250, 120, 250],
             data: {
               ...data,
               click_url:
