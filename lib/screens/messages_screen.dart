@@ -986,10 +986,12 @@ class _NewConversationSheet extends StatefulWidget {
 class _NewConversationSheetState extends State<_NewConversationSheet> {
   final _supabase = Supabase.instance.client;
   final _titleController = TextEditingController();
+  final _searchController = TextEditingController();
 
   bool _loading = true;
   bool _saving = false;
   String _scope = 'einzelperson';
+  String _roleFilter = 'alle';
   List<Map<String, dynamic>> _profiles = [];
   final Set<String> _selectedIds = {};
 
@@ -1045,6 +1047,53 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
       default:
         return role?.toString() ?? '';
     }
+  }
+
+  List<Map<String, dynamic>> get _filteredProfiles {
+    final query = _searchController.text.trim().toLowerCase();
+
+    return _profiles.where((profile) {
+      final role = profile['role']?.toString() ?? '';
+      final name = _name(profile).toLowerCase();
+
+      final matchesRole = _roleFilter == 'alle' || role == _roleFilter;
+      final matchesSearch = query.isEmpty || name.contains(query);
+
+      return matchesRole && matchesSearch;
+    }).toList();
+  }
+
+  int _countRole(String role) {
+    return _profiles
+        .where((profile) => profile['role']?.toString() == role)
+        .length;
+  }
+
+  void _selectRole(String role) {
+    if (_scope != 'gruppe') return;
+
+    final ids = _profiles
+        .where((profile) => profile['role']?.toString() == role)
+        .map((profile) => profile['id'].toString());
+
+    setState(() {
+      _selectedIds.addAll(ids);
+      _roleFilter = role;
+    });
+  }
+
+  void _selectVisible() {
+    if (_scope != 'gruppe') return;
+
+    setState(() {
+      _selectedIds.addAll(
+        _filteredProfiles.map((profile) => profile['id'].toString()),
+      );
+    });
+  }
+
+  void _clearSelection() {
+    setState(() => _selectedIds.clear());
   }
 
   void _changeScope(String? value) {
@@ -1144,6 +1193,7 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
   @override
   void dispose() {
     _titleController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -1213,47 +1263,172 @@ class _NewConversationSheetState extends State<_NewConversationSheet> {
                 ),
               )
             else ...[
-              Text(
-                _scope == 'einzelperson'
-                    ? 'Person auswählen'
-                    : 'Personen auswählen',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _scope == 'einzelperson'
+                          ? 'Person auswählen'
+                          : 'Personen auswählen',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  if (_scope == 'gruppe')
+                    Text(
+                      '${_selectedIds.length} ausgewählt',
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Mitglied suchen',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Suche löschen',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                  border: const OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 330),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _profiles.length,
-                  itemBuilder: (context, index) {
-                    final p = _profiles[index];
-                    final id = p['id'].toString();
-                    final selected = _selectedIds.contains(id);
-
-                    return CheckboxListTile(
-                      value: selected,
-                      title: Text(_name(p)),
-                      subtitle: Text(_roleLabel(p['role'])),
-                      onChanged: (value) {
-                        setState(() {
-                          if (_scope == 'einzelperson') {
-                            _selectedIds.clear();
-                          }
-
-                          if (value == true) {
-                            _selectedIds.add(id);
-                          } else {
-                            _selectedIds.remove(id);
-                          }
-                        });
-                      },
-                    );
-                  },
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 42,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    ChoiceChip(
+                      label: Text('Alle (${_profiles.length})'),
+                      selected: _roleFilter == 'alle',
+                      onSelected: (_) => setState(() => _roleFilter = 'alle'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: Text(
+                        'Jugend (${_countRole('jugendmitglied')})',
+                      ),
+                      selected: _roleFilter == 'jugendmitglied',
+                      onSelected: (_) =>
+                          setState(() => _roleFilter = 'jugendmitglied'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: Text('Eltern (${_countRole('eltern')})'),
+                      selected: _roleFilter == 'eltern',
+                      onSelected: (_) => setState(() => _roleFilter = 'eltern'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: Text(
+                        'Ausbilder (${_countRole('ausbilder')})',
+                      ),
+                      selected: _roleFilter == 'ausbilder',
+                      onSelected: (_) =>
+                          setState(() => _roleFilter = 'ausbilder'),
+                    ),
+                  ],
                 ),
               ),
+              if (_scope == 'gruppe') ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ActionChip(
+                      avatar: const Icon(Icons.groups_outlined, size: 18),
+                      label: const Text('Jugend auswählen'),
+                      onPressed: () => _selectRole('jugendmitglied'),
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.family_restroom, size: 18),
+                      label: const Text('Eltern auswählen'),
+                      onPressed: () => _selectRole('eltern'),
+                    ),
+                    ActionChip(
+                      avatar: const Icon(
+                        Icons.local_fire_department_outlined,
+                        size: 18,
+                      ),
+                      label: const Text('Ausbilder auswählen'),
+                      onPressed: () => _selectRole('ausbilder'),
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.done_all, size: 18),
+                      label: const Text('Sichtbare auswählen'),
+                      onPressed:
+                          _filteredProfiles.isEmpty ? null : _selectVisible,
+                    ),
+                    ActionChip(
+                      avatar: const Icon(Icons.clear, size: 18),
+                      label: const Text('Auswahl löschen'),
+                      onPressed: _selectedIds.isEmpty ? null : _clearSelection,
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 10),
+              if (_filteredProfiles.isEmpty)
+                const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.person_search),
+                    title: Text('Keine passenden Mitglieder gefunden.'),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 330),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: _filteredProfiles.length,
+                    itemBuilder: (context, index) {
+                      final p = _filteredProfiles[index];
+                      final id = p['id'].toString();
+                      final selected = _selectedIds.contains(id);
+
+                      return CheckboxListTile(
+                        value: selected,
+                        title: Text(_name(p)),
+                        subtitle: Text(_roleLabel(p['role'])),
+                        secondary: CircleAvatar(
+                          child: Text(
+                            _name(p).trim().isEmpty
+                                ? '?'
+                                : _name(p).trim()[0].toUpperCase(),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            if (_scope == 'einzelperson') {
+                              _selectedIds.clear();
+                            }
+
+                            if (value == true) {
+                              _selectedIds.add(id);
+                            } else {
+                              _selectedIds.remove(id);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
             ],
             const SizedBox(height: 18),
             SizedBox(
