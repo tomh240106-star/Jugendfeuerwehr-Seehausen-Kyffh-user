@@ -1,0 +1,83 @@
+name: Fix Web Alarm Notifications
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-web-alarm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Update service worker
+        env:
+          SW_B64: "aW1wb3J0U2NyaXB0cygKICAiaHR0cHM6Ly93d3cuZ3N0YXRpYy5jb20vZmlyZWJhc2Vqcy8xMC4xNC4xL2ZpcmViYXNlLWFwcC1jb21wYXQuanMiCik7CmltcG9ydFNjcmlwdHMoCiAgImh0dHBzOi8vd3d3LmdzdGF0aWMuY29tL2ZpcmViYXNlanMvMTAuMTQuMS9maXJlYmFzZS1tZXNzYWdpbmctY29tcGF0LmpzIgopOwoKZmlyZWJhc2UuaW5pdGlhbGl6ZUFwcCh7CiAgYXBpS2V5OiAiQUl6YVN5QWVveEVMRzEtTERNQzQ5WDRIOVluRDFZYWFJZHJkeENBIiwKICBhdXRoRG9tYWluOiAianVnZW5kZmV1ZXJ3ZWhyLXNlZWhhdXNlbi5maXJlYmFzZWFwcC5jb20iLAogIHByb2plY3RJZDogImp1Z2VuZGZldWVyd2Voci1zZWVoYXVzZW4iLAogIHN0b3JhZ2VCdWNrZXQ6ICJqdWdlbmRmZXVlcndlaHItc2VlaGF1c2VuLmZpcmViYXNlc3RvcmFnZS5hcHAiLAogIG1lc3NhZ2luZ1NlbmRlcklkOiAiNTMzNDIyNDg3MDc1IiwKICBhcHBJZDogIjE6NTMzNDIyNDg3MDc1OndlYjpkM2UwYTk3MGFkYzcyOGU1ZTRlMzk2IiwKICBtZWFzdXJlbWVudElkOiAiRy05VzY4Q1Y5Rks0Igp9KTsKCmNvbnN0IG1lc3NhZ2luZyA9IGZpcmViYXNlLm1lc3NhZ2luZygpOwoKbWVzc2FnaW5nLm9uQmFja2dyb3VuZE1lc3NhZ2UoKHBheWxvYWQpID0+IHsKICBjb25zdCBkYXRhID0gcGF5bG9hZC5kYXRhIHx8IHt9OwogIGlmICgoZGF0YS5zb3VyY2UgfHwgIiIpID09PSAiamZfYWxhcm1fY2FuY2VsIikgcmV0dXJuOwoKICBjb25zdCB0aXRsZSA9CiAgICBkYXRhLnRpdGxlIHx8CiAgICAocGF5bG9hZC5ub3RpZmljYXRpb24gJiYgcGF5bG9hZC5ub3RpZmljYXRpb24udGl0bGUpIHx8CiAgICAiSlVHRU5ERkVVRVJXRUhSLUFMQVJNIjsKCiAgY29uc3QgYm9keSA9CiAgICBkYXRhLmJvZHkgfHwKICAgIChwYXlsb2FkLm5vdGlmaWNhdGlvbiAmJiBwYXlsb2FkLm5vdGlmaWNhdGlvbi5ib2R5KSB8fAogICAgIkFsYXJtIMO2ZmZuZW4gdW5kIFLDvGNrbWVsZHVuZyBnZWJlbi4iOwoKICBjb25zdCBhbGFybUlkID0gZGF0YS5hbGFybV9pZCB8fCAiYWN0aXZlIjsKICBjb25zdCBjbGlja1VybCA9CiAgICBkYXRhLmNsaWNrX3VybCB8fAogICAgImh0dHBzOi8vdG9taDI0MDEwNi1zdGFyLmdpdGh1Yi5pby9KdWdlbmRmZXVlcndlaHItU2VlaGF1c2VuLUt5ZmZoLXVzZXIvIjsKCiAgcmV0dXJuIHNlbGYucmVnaXN0cmF0aW9uLnNob3dOb3RpZmljYXRpb24odGl0bGUsIHsKICAgIGJvZHksCiAgICBpY29uOgogICAgICBkYXRhLmljb25fdXJsIHx8CiAgICAgICJodHRwczovL3RvbWgyNDAxMDYtc3Rhci5naXRodWIuaW8vSnVnZW5kZmV1ZXJ3ZWhyLVNlZWhhdXNlbi1LeWZmaC11c2VyL2ljb25zL0ljb24tMTkyLnBuZyIsCiAgICBiYWRnZToKICAgICAgZGF0YS5pY29uX3VybCB8fAogICAgICAiaHR0cHM6Ly90b21oMjQwMTA2LXN0YXIuZ2l0aHViLmlvL0p1Z2VuZGZldWVyd2Voci1TZWVoYXVzZW4tS3lmZmgtdXNlci9pY29ucy9JY29uLTE5Mi5wbmciLAogICAgdGFnOiBgamYtYWxhcm0tJHthbGFybUlkfWAsCiAgICByZW5vdGlmeTogdHJ1ZSwKICAgIHJlcXVpcmVJbnRlcmFjdGlvbjogdHJ1ZSwKICAgIHNpbGVudDogZmFsc2UsCiAgICB2aWJyYXRlOiBbNTAwLCAyMDAsIDUwMCwgMjAwLCA5MDBdLAogICAgZGF0YTogeyAuLi5kYXRhLCBjbGlja191cmw6IGNsaWNrVXJsIH0KICB9KTsKfSk7CgpzZWxmLmFkZEV2ZW50TGlzdGVuZXIoIm5vdGlmaWNhdGlvbmNsaWNrIiwgKGV2ZW50KSA9PiB7CiAgZXZlbnQubm90aWZpY2F0aW9uLmNsb3NlKCk7CgogIGNvbnN0IGFwcFVybCA9CiAgICAoZXZlbnQubm90aWZpY2F0aW9uICYmCiAgICAgIGV2ZW50Lm5vdGlmaWNhdGlvbi5kYXRhICYmCiAgICAgIGV2ZW50Lm5vdGlmaWNhdGlvbi5kYXRhLmNsaWNrX3VybCkgfHwKICAgICJodHRwczovL3RvbWgyNDAxMDYtc3Rhci5naXRodWIuaW8vSnVnZW5kZmV1ZXJ3ZWhyLVNlZWhhdXNlbi1LeWZmaC11c2VyLyI7CgogIGV2ZW50LndhaXRVbnRpbCgKICAgIGNsaWVudHMubWF0Y2hBbGwoeyB0eXBlOiAid2luZG93IiwgaW5jbHVkZVVuY29udHJvbGxlZDogdHJ1ZSB9KS50aGVuKChjbGllbnRMaXN0KSA9PiB7CiAgICAgIGZvciAoY29uc3QgY2xpZW50IG9mIGNsaWVudExpc3QpIHsKICAgICAgICBpZiAoImZvY3VzIiBpbiBjbGllbnQpIHsKICAgICAgICAgIGlmICgibmF2aWdhdGUiIGluIGNsaWVudCkgY2xpZW50Lm5hdmlnYXRlKGFwcFVybCk7CiAgICAgICAgICByZXR1cm4gY2xpZW50LmZvY3VzKCk7CiAgICAgICAgfQogICAgICB9CiAgICAgIGlmIChjbGllbnRzLm9wZW5XaW5kb3cpIHJldHVybiBjbGllbnRzLm9wZW5XaW5kb3coYXBwVXJsKTsKICAgICAgcmV0dXJuIHVuZGVmaW5lZDsKICAgIH0pCiAgKTsKfSk7Cg=="
+        run: |
+          echo "$SW_B64" | base64 --decode > web/firebase-messaging-sw.js
+
+      - name: Add foreground alarm handling
+        env:
+          FG_B64: "CiAgICBqZk1lc3NhZ2luZy5vbk1lc3NhZ2UoKHBheWxvYWQpID0+IHsKICAgICAgY29uc3QgZGF0YSA9IHBheWxvYWQ/LmRhdGEgfHwge307CiAgICAgIGlmICgoZGF0YS5zb3VyY2UgfHwgIiIpICE9PSAiamZfYWxhcm0iKSByZXR1cm47CgogICAgICBjb25zdCB0aXRsZSA9CiAgICAgICAgZGF0YS50aXRsZSB8fAogICAgICAgIHBheWxvYWQ/Lm5vdGlmaWNhdGlvbj8udGl0bGUgfHwKICAgICAgICAiSlVHRU5ERkVVRVJXRUhSLUFMQVJNIjsKCiAgICAgIGNvbnN0IGJvZHkgPQogICAgICAgIGRhdGEuYm9keSB8fAogICAgICAgIHBheWxvYWQ/Lm5vdGlmaWNhdGlvbj8uYm9keSB8fAogICAgICAgICJBbGFybSDDtmZmbmVuIHVuZCBSw7xja21lbGR1bmcgZ2ViZW4uIjsKCiAgICAgIGlmIChOb3RpZmljYXRpb24ucGVybWlzc2lvbiA9PT0gImdyYW50ZWQiKSB7CiAgICAgICAgamZHZXRQdXNoUmVnaXN0cmF0aW9uKCkudGhlbigocmVnaXN0cmF0aW9uKSA9PiB7CiAgICAgICAgICByZWdpc3RyYXRpb24uc2hvd05vdGlmaWNhdGlvbih0aXRsZSwgewogICAgICAgICAgICBib2R5LAogICAgICAgICAgICBpY29uOiBkYXRhLmljb25fdXJsIHx8ICJpY29ucy9JY29uLTE5Mi5wbmciLAogICAgICAgICAgICBiYWRnZTogZGF0YS5pY29uX3VybCB8fCAiaWNvbnMvSWNvbi0xOTIucG5nIiwKICAgICAgICAgICAgdGFnOiBgamYtYWxhcm0tJHtkYXRhLmFsYXJtX2lkIHx8ICJhY3RpdmUifWAsCiAgICAgICAgICAgIHJlbm90aWZ5OiB0cnVlLAogICAgICAgICAgICByZXF1aXJlSW50ZXJhY3Rpb246IHRydWUsCiAgICAgICAgICAgIHNpbGVudDogZmFsc2UsCiAgICAgICAgICAgIHZpYnJhdGU6IFs1MDAsIDIwMCwgNTAwLCAyMDAsIDkwMF0sCiAgICAgICAgICAgIGRhdGE6IHsKICAgICAgICAgICAgICAuLi5kYXRhLAogICAgICAgICAgICAgIGNsaWNrX3VybDoKICAgICAgICAgICAgICAgIGRhdGEuY2xpY2tfdXJsIHx8CiAgICAgICAgICAgICAgICB3aW5kb3cubG9jYXRpb24ub3JpZ2luICsKICAgICAgICAgICAgICAgICAgIi9KdWdlbmRmZXVlcndlaHItU2VlaGF1c2VuLUt5ZmZoLXVzZXIvIgogICAgICAgICAgICB9CiAgICAgICAgICB9KTsKICAgICAgICB9KTsKICAgICAgfQogICAgfSk7Cgo="
+        run: |
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          path = Path("web/index.html")
+          text = path.read_text(encoding="utf-8")
+          marker = "    window.jfWebPushGetToken = async function () {\n"
+          block = base64.b64decode(os.environ["FG_B64"]).decode("utf-8")
+
+          if "jfMessaging.onMessage((payload)" not in text:
+              if marker not in text:
+                  raise SystemExit("Einfügestelle in web/index.html nicht gefunden.")
+              text = text.replace(marker, block + marker, 1)
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify
+        run: |
+          grep -q "onBackgroundMessage" build/web/firebase-messaging-sw.js
+          grep -q "showNotification" build/web/firebase-messaging-sw.js
+          grep -q "requireInteraction" build/web/firebase-messaging-sw.js
+          grep -q "silent: false" build/web/firebase-messaging-sw.js
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/firebase-messaging-sw.js web/index.html
+          if git diff --cached --quiet; then
+            echo "Fix bereits vorhanden."
+            exit 0
+          fi
+          git commit -m "Fix web alarm notifications"
+          git push origin main
