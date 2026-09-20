@@ -18,6 +18,9 @@ class _EventsScreenState extends State<EventsScreen> {
 
   List<Map<String, dynamic>> _events = [];
   final Map<String, String> _attendanceByEvent = {};
+  String _searchQuery = '';
+  String _timeFilter = 'kommend';
+  String _typeFilter = 'alle';
 
   @override
   void initState() {
@@ -262,6 +265,74 @@ class _EventsScreenState extends State<EventsScreen> {
       default:
         return const Color(0xFF8A95A5);
     }
+  }
+
+  bool _isPastEvent(Map<String, dynamic> event) {
+    final end = _parseDate(event['ends_at']);
+    final start = _parseDate(event['starts_at']);
+    final reference = end ?? start;
+    if (reference == null) return false;
+    return reference.isBefore(DateTime.now());
+  }
+
+  List<Map<String, dynamic>> get _filteredEvents {
+    final query = _searchQuery.trim().toLowerCase();
+
+    final result = _events
+        .where((event) {
+          final title = event['title']?.toString().toLowerCase() ?? '';
+          final location = event['location']?.toString().toLowerCase() ?? '';
+          final description =
+              event['description']?.toString().toLowerCase() ?? '';
+          final type = event['event_type']?.toString() ?? 'dienst';
+          final isPast = _isPastEvent(event);
+
+          final matchesSearch = query.isEmpty ||
+              title.contains(query) ||
+              location.contains(query) ||
+              description.contains(query);
+
+          final matchesTime = _timeFilter == 'alle' ||
+              (_timeFilter == 'kommend' && !isPast) ||
+              (_timeFilter == 'vergangen' && isPast);
+
+          final matchesType = _typeFilter == 'alle' || _typeFilter == type;
+
+          return matchesSearch && matchesTime && matchesType;
+        })
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+
+    result.sort((a, b) {
+      final aDate = _parseDate(a['starts_at']);
+      final bDate = _parseDate(b['starts_at']);
+
+      if (aDate == null && bDate == null) return 0;
+      if (aDate == null) return 1;
+      if (bDate == null) return -1;
+
+      if (_timeFilter == 'vergangen') {
+        return bDate.compareTo(aDate);
+      }
+      return aDate.compareTo(bDate);
+    });
+
+    return result;
+  }
+
+  int _timeCount(String filter) {
+    if (filter == 'alle') return _events.length;
+    if (filter == 'vergangen') {
+      return _events.where(_isPastEvent).length;
+    }
+    return _events.where((event) => !_isPastEvent(event)).length;
+  }
+
+  int _typeCount(String type) {
+    if (type == 'alle') return _events.length;
+    return _events
+        .where((event) => event['event_type']?.toString() == type)
+        .length;
   }
 
   Future<void> _openEditor({
@@ -973,7 +1044,129 @@ class _EventsScreenState extends State<EventsScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 18, 16, 100),
+              padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+              child: Column(
+                children: [
+                  TextField(
+                    onChanged: (value) {
+                      setState(() => _searchQuery = value);
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Termin suchen',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 42,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ChoiceChip(
+                          label: Text(
+                            'Kommend (${_timeCount('kommend')})',
+                          ),
+                          selected: _timeFilter == 'kommend',
+                          onSelected: (_) =>
+                              setState(() => _timeFilter = 'kommend'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Vergangen (${_timeCount('vergangen')})',
+                          ),
+                          selected: _timeFilter == 'vergangen',
+                          onSelected: (_) =>
+                              setState(() => _timeFilter = 'vergangen'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text('Alle (${_timeCount('alle')})'),
+                          selected: _timeFilter == 'alle',
+                          onSelected: (_) =>
+                              setState(() => _timeFilter = 'alle'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    height: 42,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        ChoiceChip(
+                          label: Text('Alle Arten (${_typeCount('alle')})'),
+                          selected: _typeFilter == 'alle',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'alle'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text('Dienst (${_typeCount('dienst')})'),
+                          selected: _typeFilter == 'dienst',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'dienst'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Veranstaltung (${_typeCount('veranstaltung')})',
+                          ),
+                          selected: _typeFilter == 'veranstaltung',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'veranstaltung'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Wettbewerb (${_typeCount('wettbewerb')})',
+                          ),
+                          selected: _typeFilter == 'wettbewerb',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'wettbewerb'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Zeltlager (${_typeCount('zeltlager')})',
+                          ),
+                          selected: _typeFilter == 'zeltlager',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'zeltlager'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Elternabend (${_typeCount('elternabend')})',
+                          ),
+                          selected: _typeFilter == 'elternabend',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'elternabend'),
+                        ),
+                        const SizedBox(width: 8),
+                        ChoiceChip(
+                          label: Text(
+                            'Sonstiges (${_typeCount('sonstiges')})',
+                          ),
+                          selected: _typeFilter == 'sonstiges',
+                          onSelected: (_) =>
+                              setState(() => _typeFilter = 'sonstiges'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 100),
               child: _events.isEmpty
                   ? Container(
                       padding: const EdgeInsets.symmetric(
@@ -1007,188 +1200,259 @@ class _EventsScreenState extends State<EventsScreen> {
                         ],
                       ),
                     )
-                  : Column(
-                      children: _events.map((event) {
-                        final start = _parseDate(event['starts_at']);
-                        final end = _parseDate(event['ends_at']);
-                        final type =
-                            event['event_type']?.toString() ?? 'dienst';
-                        final status =
-                            _attendanceByEvent[event['id']?.toString()];
-                        final statusColor = _attendanceColor(status);
-
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 13),
+                  : _filteredEvents.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 24,
+                            vertical: 40,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(22),
                             border: Border.all(
                               color: const Color(0xFFE3E8EE),
                             ),
-                            boxShadow: const [
-                              BoxShadow(
-                                blurRadius: 12,
-                                offset: Offset(0, 4),
-                                color: Color(0x0D000000),
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 60,
+                                color: blue,
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                'Keine passenden Termine gefunden.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: navy,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ],
                           ),
-                          child: InkWell(
-                            onTap: () => _showDetails(event),
-                            borderRadius: BorderRadius.circular(22),
-                            child: Padding(
-                              padding: const EdgeInsets.all(15),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Container(
-                                    width: 66,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF4F7FA),
-                                      borderRadius: BorderRadius.circular(18),
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        Text(
-                                          start == null
-                                              ? '--'
-                                              : start.day
-                                                  .toString()
-                                                  .padLeft(2, '0'),
-                                          style: const TextStyle(
-                                            color: navy,
-                                            fontSize: 26,
-                                            fontWeight: FontWeight.w900,
-                                            height: 1,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _monthShort(start),
-                                          style: const TextStyle(
-                                            color: red,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: 0.6,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                event['title']?.toString() ??
-                                                    'Termin',
-                                                style: const TextStyle(
-                                                  fontSize: 18,
-                                                  fontWeight: FontWeight.w800,
-                                                  color: navy,
-                                                ),
-                                              ),
-                                            ),
-                                            const Icon(
-                                              Icons.chevron_right,
-                                              color: Color(0xFF7E8996),
-                                            ),
-                                          ],
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _typeName(type),
-                                          style: const TextStyle(
-                                            color: blue,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.schedule,
-                                              size: 17,
-                                              color: Color(0xFF73808F),
-                                            ),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              end == null
-                                                  ? '${_time(start)} Uhr'
-                                                  : '${_time(start)} – ${_time(end)} Uhr',
-                                              style: const TextStyle(
-                                                color: Color(0xFF4B5563),
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if ((event['location'] ?? '')
-                                            .toString()
-                                            .isNotEmpty) ...[
-                                          const SizedBox(height: 6),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.location_on_outlined,
-                                                size: 17,
-                                                color: Color(0xFF73808F),
-                                              ),
-                                              const SizedBox(width: 6),
-                                              Expanded(
-                                                child: Text(
-                                                  event['location'].toString(),
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF4B5563),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                        const SizedBox(height: 10),
-                                        Row(
-                                          children: [
-                                            Container(
-                                              width: 9,
-                                              height: 9,
-                                              decoration: BoxDecoration(
-                                                color: statusColor,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 7),
-                                            Expanded(
-                                              child: Text(
-                                                _attendanceLabel(status),
-                                                style: TextStyle(
-                                                  color: statusColor,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ],
-                                    ),
+                        )
+                      : Column(
+                          children: _filteredEvents.map((event) {
+                            final start = _parseDate(event['starts_at']);
+                            final end = _parseDate(event['ends_at']);
+                            final type =
+                                event['event_type']?.toString() ?? 'dienst';
+                            final status =
+                                _attendanceByEvent[event['id']?.toString()];
+                            final statusColor = _attendanceColor(status);
+
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 13),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                  color: const Color(0xFFE3E8EE),
+                                ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    blurRadius: 12,
+                                    offset: Offset(0, 4),
+                                    color: Color(0x0D000000),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                              child: InkWell(
+                                onTap: () => _showDetails(event),
+                                borderRadius: BorderRadius.circular(22),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(15),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: 66,
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 10,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF4F7FA),
+                                          borderRadius:
+                                              BorderRadius.circular(18),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Text(
+                                              start == null
+                                                  ? '--'
+                                                  : start.day
+                                                      .toString()
+                                                      .padLeft(2, '0'),
+                                              style: const TextStyle(
+                                                color: navy,
+                                                fontSize: 26,
+                                                fontWeight: FontWeight.w900,
+                                                height: 1,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _monthShort(start),
+                                              style: const TextStyle(
+                                                color: red,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.6,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    event['title']
+                                                            ?.toString() ??
+                                                        'Termin',
+                                                    style: const TextStyle(
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: navy,
+                                                    ),
+                                                  ),
+                                                ),
+                                                if (_isPastEvent(event))
+                                                  Container(
+                                                    margin:
+                                                        const EdgeInsets.only(
+                                                      right: 6,
+                                                    ),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                        0xFFE7ECF2,
+                                                      ),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                    ),
+                                                    child: const Text(
+                                                      'Vergangen',
+                                                      style: TextStyle(
+                                                        color:
+                                                            Color(0xFF667085),
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                const Icon(
+                                                  Icons.chevron_right,
+                                                  color: Color(0xFF7E8996),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              _typeName(type),
+                                              style: const TextStyle(
+                                                color: blue,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.schedule,
+                                                  size: 17,
+                                                  color: Color(0xFF73808F),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Text(
+                                                  end == null
+                                                      ? '${_time(start)} Uhr'
+                                                      : '${_time(start)} – ${_time(end)} Uhr',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF4B5563),
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if ((event['location'] ?? '')
+                                                .toString()
+                                                .isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.location_on_outlined,
+                                                    size: 17,
+                                                    color: Color(0xFF73808F),
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: Text(
+                                                      event['location']
+                                                          .toString(),
+                                                      style: const TextStyle(
+                                                        color:
+                                                            Color(0xFF4B5563),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                            const SizedBox(height: 10),
+                                            Row(
+                                              children: [
+                                                Container(
+                                                  width: 9,
+                                                  height: 9,
+                                                  decoration: BoxDecoration(
+                                                    color: statusColor,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 7),
+                                                Expanded(
+                                                  child: Text(
+                                                    _attendanceLabel(status),
+                                                    style: TextStyle(
+                                                      color: statusColor,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
             ),
           ],
         ),
