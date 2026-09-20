@@ -170,6 +170,8 @@
     window.jfWebPushRequestToken = async function () {
       if (!("Notification" in window)) return "";
 
+      window.jfWebAlarmPrime();
+
       const permission = await Notification.requestPermission();
       if (permission !== "granted") return "";
 
@@ -184,7 +186,20 @@
 
     jfMessaging.onMessage((payload) => {
       const data = payload?.data || {};
-      if ((data.source || "") !== "jf_alarm") return;
+      const source = data.source || "";
+
+      if (source === "jf_alarm_cancel") {
+        window.jfWebAlarmStop();
+        return;
+      }
+
+      if (source !== "jf_alarm") return;
+
+      window.jfWebAlarmStart(
+        data.alarm_id || "active",
+        data.title || "JUGENDFEUERWEHR-ALARM",
+        data.body || "Alarm öffnen und Rückmeldung geben."
+      );
 
       const title =
         data.title ||
