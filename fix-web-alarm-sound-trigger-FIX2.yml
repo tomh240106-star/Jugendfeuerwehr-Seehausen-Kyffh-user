@@ -1,0 +1,156 @@
+name: Fix Web Alarm Sound Trigger
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix-web-alarm-sound-trigger:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Patch web alarm trigger robustly
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("web/index.html")
+          text = path.read_text(encoding="utf-8")
+
+          # 1) Audio durch echten Benutzer-Klick freischalten.
+          request_marker = '      const permission = await Notification.requestPermission();'
+          if 'window.jfWebAlarmPrime();' not in text:
+              if request_marker not in text:
+                  raise SystemExit("Notification.requestPermission wurde nicht gefunden.")
+              text = text.replace(
+                  request_marker,
+                  '      window.jfWebAlarmPrime();\n\n' + request_marker,
+                  1,
+              )
+
+          # 2) Foreground-FCM soll den Alarmton wirklich starten/stoppen.
+          old = '''    jfMessaging.onMessage((payload) => {
+                const data = payload?.data || {};
+                if ((data.source || "") !== "jf_alarm") return;
+
+                const title =
+          '''
+
+          new = '''    jfMessaging.onMessage((payload) => {
+                const data = payload?.data || {};
+                const source = data.source || "";
+
+                if (source === "jf_alarm_cancel") {
+                  window.jfWebAlarmStop();
+                  return;
+                }
+
+                if (source !== "jf_alarm") return;
+
+                window.jfWebAlarmStart(
+                  data.alarm_id || "active",
+                  data.title || "JUGENDFEUERWEHR-ALARM",
+                  data.body || "Alarm öffnen und Rückmeldung geben."
+                );
+
+                const title =
+          '''
+
+          if 'if (source === "jf_alarm_cancel")' not in text:
+              if old not in text:
+                  # Fallback: ersetze nur die zwei bekannten Zeilen.
+                  short_old = '''      const data = payload?.data || {};
+                if ((data.source || "") !== "jf_alarm") return;
+          '''
+                  short_new = '''      const data = payload?.data || {};
+                const source = data.source || "";
+
+                if (source === "jf_alarm_cancel") {
+                  window.jfWebAlarmStop();
+                  return;
+                }
+
+                if (source !== "jf_alarm") return;
+
+                window.jfWebAlarmStart(
+                  data.alarm_id || "active",
+                  data.title || "JUGENDFEUERWEHR-ALARM",
+                  data.body || "Alarm öffnen und Rückmeldung geben."
+                );
+          '''
+                  if short_old not in text:
+                      raise SystemExit("Foreground-Push-Handler wurde nicht gefunden.")
+                  text = text.replace(short_old, short_new, 1)
+              else:
+                  text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding="utf-8")
+          print("web/index.html erfolgreich angepasst.")
+          PY
+
+      - name: Verify patch
+        run: |
+          set -e
+          grep -q "window.jfWebAlarmPrime();" web/index.html
+          grep -q 'if (source === "jf_alarm_cancel")' web/index.html
+          grep -q "window.jfWebAlarmStart(" web/index.html
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify built web
+        run: |
+          set -e
+          test -f build/web/jf_alarm.wav
+          grep -q "window.jfWebAlarmPrime();" build/web/index.html
+          grep -q 'if (source === "jf_alarm_cancel")' build/web/index.html
+          grep -q "window.jfWebAlarmStart(" build/web/index.html
+
+      - name: Commit
+        shell: bash
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add web/index.html
+
+          if git diff --cached --quiet; then
+            echo "Fix bereits vorhanden."
+            exit 0
+          fi
+
+          git commit -m "Fix web alarm sound trigger"
+          git push origin main
+
+      - name: Summary
+        run: |
+          echo "### Web-Alarmton Trigger repariert" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Alarm-Audio wird beim Aktivieren der Benachrichtigungen freigeschaltet" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Foreground-Web-Push startet jf_alarm.wav" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Alarmende stoppt den Web-Alarmton" >> "$GITHUB_STEP_SUMMARY"
