@@ -17,6 +17,7 @@ class _MembersScreenState extends State<MembersScreen> {
   List<Map<String, dynamic>> _links = [];
   String _searchQuery = '';
   String _roleFilter = 'alle';
+  bool _onlyUnlinked = false;
 
   @override
   void initState() {
@@ -95,6 +96,36 @@ class _MembersScreenState extends State<MembersScreen> {
     return null;
   }
 
+  bool _isLinked(Map<String, dynamic> p) {
+    final id = p['id']?.toString();
+    final role = p['role']?.toString();
+
+    if (id == null) return false;
+
+    if (role == 'eltern') {
+      return _links.any((l) => l['parent_id']?.toString() == id);
+    }
+
+    if (role == 'jugendmitglied') {
+      return _links.any((l) => l['child_id']?.toString() == id);
+    }
+
+    return true;
+  }
+
+  int _roleCount(String role) {
+    if (role == 'alle') return _profiles.length;
+    return _profiles.where((p) => p['role']?.toString() == role).length;
+  }
+
+  int get _unlinkedCount {
+    return _profiles.where((p) {
+      final role = p['role']?.toString();
+      if (role != 'eltern' && role != 'jugendmitglied') return false;
+      return !_isLinked(p);
+    }).length;
+  }
+
   String _relationsText(Map<String, dynamic> p) {
     final id = p['id']?.toString();
     final role = p['role']?.toString();
@@ -164,8 +195,9 @@ class _MembersScreenState extends State<MembersScreen> {
           query.isEmpty || name.contains(query) || phone.contains(query);
 
       final matchesRole = _roleFilter == 'alle' || role == _roleFilter;
+      final matchesLink = !_onlyUnlinked || !_isLinked(profile);
 
-      return matchesSearch && matchesRole;
+      return matchesSearch && matchesRole && matchesLink;
     }).toList();
   }
 
@@ -294,34 +326,80 @@ class _MembersScreenState extends State<MembersScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: const Color(0xFFE3E8EE),
+                            ),
+                          ),
+                          child: Text(
+                            '${_profiles.length} Mitglieder · '
+                            '${_links.length} Verknüpfungen',
+                            style: const TextStyle(
+                              color: navy,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (_unlinkedCount > 0) ...[
+                        const SizedBox(width: 8),
+                        FilterChip(
+                          avatar: const Icon(
+                            Icons.link_off,
+                            size: 18,
+                          ),
+                          label: Text('Ohne Link ($_unlinkedCount)'),
+                          selected: _onlyUnlinked,
+                          onSelected: (value) {
+                            setState(() => _onlyUnlinked = value);
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 10),
                   SizedBox(
                     height: 42,
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
                         ChoiceChip(
-                          label: const Text('Alle'),
+                          label: Text('Alle (${_roleCount('alle')})'),
                           selected: _roleFilter == 'alle',
                           onSelected: (_) =>
                               setState(() => _roleFilter = 'alle'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: const Text('Ausbilder'),
+                          label: Text(
+                            'Ausbilder (${_roleCount('ausbilder')})',
+                          ),
                           selected: _roleFilter == 'ausbilder',
                           onSelected: (_) =>
                               setState(() => _roleFilter = 'ausbilder'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: const Text('Jugend'),
+                          label: Text(
+                            'Jugend (${_roleCount('jugendmitglied')})',
+                          ),
                           selected: _roleFilter == 'jugendmitglied',
                           onSelected: (_) =>
                               setState(() => _roleFilter = 'jugendmitglied'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: const Text('Eltern'),
+                          label: Text('Eltern (${_roleCount('eltern')})'),
                           selected: _roleFilter == 'eltern',
                           onSelected: (_) =>
                               setState(() => _roleFilter = 'eltern'),
@@ -437,12 +515,58 @@ class _MembersScreenState extends State<MembersScreen> {
                                           ),
                                         ),
                                         const SizedBox(height: 3),
-                                        Text(
-                                          _roleLabel(role),
-                                          style: TextStyle(
-                                            color: accent,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                        Row(
+                                          children: [
+                                            Text(
+                                              _roleLabel(role),
+                                              style: TextStyle(
+                                                color: accent,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            if (role == 'eltern' ||
+                                                role == 'jugendmitglied')
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 7,
+                                                  vertical: 3,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: (_isLinked(p)
+                                                          ? const Color(
+                                                              0xFF13A05B,
+                                                            )
+                                                          : const Color(
+                                                              0xFFFF8A00,
+                                                            ))
+                                                      .withValues(
+                                                    alpha: 0.12,
+                                                  ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                    999,
+                                                  ),
+                                                ),
+                                                child: Text(
+                                                  _isLinked(p)
+                                                      ? 'Verknüpft'
+                                                      : 'Nicht verknüpft',
+                                                  style: TextStyle(
+                                                    color: _isLinked(p)
+                                                        ? const Color(
+                                                            0xFF13A05B,
+                                                          )
+                                                        : const Color(
+                                                            0xFFFF8A00,
+                                                          ),
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                         if ((p['phone'] ?? '')
                                             .toString()
@@ -466,6 +590,34 @@ class _MembersScreenState extends State<MembersScreen> {
                                             ],
                                           ),
                                         ],
+                                        const SizedBox(height: 7),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              p['notifications_enabled'] == true
+                                                  ? Icons
+                                                      .notifications_active_outlined
+                                                  : Icons
+                                                      .notifications_off_outlined,
+                                              size: 17,
+                                              color:
+                                                  p['notifications_enabled'] ==
+                                                          true
+                                                      ? green
+                                                      : const Color(0xFF98A2B3),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              p['notifications_enabled'] == true
+                                                  ? 'Push aktiviert'
+                                                  : 'Push deaktiviert',
+                                              style: const TextStyle(
+                                                color: Color(0xFF667085),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                         if (relation.isNotEmpty) ...[
                                           const SizedBox(height: 7),
                                           Text(
