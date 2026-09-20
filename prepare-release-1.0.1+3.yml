@@ -1,0 +1,65 @@
+name: Prepare Release 1.0.1+3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set release version
+        shell: bash
+        run: |
+          echo 'CmZyb20gcGF0aGxpYiBpbXBvcnQgUGF0aAppbXBvcnQgcmUKCnAgPSBQYXRoKCJwdWJzcGVjLnlhbWwiKQpzID0gcC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IikKCm5ld192ZXJzaW9uID0gIjEuMC4xKzMiCnBhdHRlcm4gPSByIig/bSledmVyc2lvbjpccypbXlxuXSskIgoKaWYgbm90IHJlLnNlYXJjaChwYXR0ZXJuLCBzKToKICAgIHJhaXNlIFN5c3RlbUV4aXQoInZlcnNpb24gZW50cnkgbm90IGZvdW5kIikKCnMgPSByZS5zdWIocGF0dGVybiwgZiJ2ZXJzaW9uOiB7bmV3X3ZlcnNpb259IiwgcywgY291bnQ9MSkKcC53cml0ZV90ZXh0KHMsIGVuY29kaW5nPSJ1dGYtOCIpCgpwcmludChmIlZlcnNpb24gZ2VzZXR6dCBhdWYge25ld192ZXJzaW9ufSIpCg==' | base64 -d > /tmp/release_version.py
+          python3 -m py_compile /tmp/release_version.py
+          python3 /tmp/release_version.py
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Build web release
+        run: >
+          flutter build web
+          --release
+          --base-href "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+          --dart-define=SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+          --dart-define=SUPABASE_ANON_KEY="${{ secrets.SUPABASE_ANON_KEY }}"
+
+      - name: Verify release version
+        run: |
+          grep -q "^version: 1.0.1+3$" pubspec.yaml
+          test -f build/web/index.html
+          test -f build/web/manifest.json
+
+      - name: Commit release version
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml
+
+          if git diff --cached --quiet; then
+            echo "Version ist bereits 1.0.1+3."
+            exit 0
+          fi
+
+          git commit -m "Prepare release 1.0.1+3"
+          git push origin main
