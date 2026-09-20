@@ -673,15 +673,58 @@ class _ChatScreenState extends State<ChatScreen> {
     return 'Mitglied';
   }
 
-  String _time(dynamic value) {
+  String _clock(dynamic value) {
     final dt = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
     if (dt == null) return '';
 
+    return '${dt.hour.toString().padLeft(2, '0')}:'
+        '${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _dayLabel(dynamic value) {
+    final dt = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (dt == null) return '';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(dt.year, dt.month, dt.day);
+    final difference = today.difference(day).inDays;
+
+    if (difference == 0) return 'Heute';
+    if (difference == 1) return 'Gestern';
+
     return '${dt.day.toString().padLeft(2, '0')}.'
         '${dt.month.toString().padLeft(2, '0')}.'
-        '${dt.year} '
-        '${dt.hour.toString().padLeft(2, '0')}:'
-        '${dt.minute.toString().padLeft(2, '0')}';
+        '${dt.year}';
+  }
+
+  bool _showDayDivider(int index) {
+    if (index == 0) return true;
+
+    final current = DateTime.tryParse(
+      _messages[index]['created_at']?.toString() ?? '',
+    )?.toLocal();
+    final previous = DateTime.tryParse(
+      _messages[index - 1]['created_at']?.toString() ?? '',
+    )?.toLocal();
+
+    if (current == null || previous == null) return false;
+
+    return current.year != previous.year ||
+        current.month != previous.month ||
+        current.day != previous.day;
+  }
+
+  bool _showSenderName(int index, bool mine) {
+    if (mine || index == 0) return !mine;
+
+    final current = _messages[index];
+    final previous = _messages[index - 1];
+
+    if (_showDayDivider(index)) return true;
+
+    return current['sender_id']?.toString() !=
+        previous['sender_id']?.toString();
   }
 
   Future<void> _sendMessage() async {
@@ -803,106 +846,146 @@ class _ChatScreenState extends State<ChatScreen> {
                                 final mine = message['sender_id']?.toString() ==
                                     _supabase.auth.currentUser?.id;
 
-                                return Align(
-                                  alignment: mine
-                                      ? Alignment.centerRight
-                                      : Alignment.centerLeft,
-                                  child: Container(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 320,
-                                    ),
-                                    margin: const EdgeInsets.only(
-                                      bottom: 10,
-                                    ),
-                                    padding: const EdgeInsets.fromLTRB(
-                                      14,
-                                      11,
-                                      14,
-                                      10,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: mine ? blue : Colors.white,
-                                      borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(18),
-                                        topRight: const Radius.circular(18),
-                                        bottomLeft: Radius.circular(
-                                          mine ? 18 : 4,
+                                final showSender = _showSenderName(index, mine);
+                                final showDay = _showDayDivider(index);
+
+                                return Column(
+                                  children: [
+                                    if (showDay)
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 10,
                                         ),
-                                        bottomRight: Radius.circular(
-                                          mine ? 4 : 18,
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE7ECF2),
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                            child: Text(
+                                              _dayLabel(
+                                                message['created_at'],
+                                              ),
+                                              style: const TextStyle(
+                                                color: Color(0xFF667085),
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
                                         ),
                                       ),
-                                      border: mine
-                                          ? null
-                                          : Border.all(
-                                              color: const Color(
-                                                0xFFE3E8EE,
-                                              ),
-                                            ),
-                                      boxShadow: const [
-                                        BoxShadow(
-                                          blurRadius: 8,
-                                          offset: Offset(0, 3),
-                                          color: Color(0x0D000000),
+                                    Align(
+                                      alignment: mine
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Container(
+                                        constraints: const BoxConstraints(
+                                          maxWidth: 320,
                                         ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        if (!mine) ...[
-                                          Text(
-                                            _senderName(message),
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w800,
-                                              color: red,
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        padding: const EdgeInsets.fromLTRB(
+                                          14,
+                                          11,
+                                          14,
+                                          9,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: mine ? blue : Colors.white,
+                                          borderRadius: BorderRadius.only(
+                                            topLeft: const Radius.circular(18),
+                                            topRight: const Radius.circular(18),
+                                            bottomLeft: Radius.circular(
+                                              mine ? 18 : 4,
+                                            ),
+                                            bottomRight: Radius.circular(
+                                              mine ? 4 : 18,
                                             ),
                                           ),
-                                          const SizedBox(height: 4),
-                                        ],
-                                        Text(
-                                          message['body']?.toString() ?? '',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            height: 1.3,
-                                            color: mine
-                                                ? Colors.white
-                                                : const Color(0xFF1F2937),
-                                          ),
+                                          border: mine
+                                              ? null
+                                              : Border.all(
+                                                  color: const Color(
+                                                    0xFFE3E8EE,
+                                                  ),
+                                                ),
+                                          boxShadow: const [
+                                            BoxShadow(
+                                              blurRadius: 8,
+                                              offset: Offset(0, 3),
+                                              color: Color(0x0D000000),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 6),
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (showSender) ...[
                                               Text(
-                                                _time(message['created_at']),
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  color: mine
-                                                      ? Colors.white70
-                                                      : const Color(0xFF98A2B3),
+                                                _senderName(message),
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: red,
                                                 ),
                                               ),
-                                              if (mine) ...[
-                                                const SizedBox(width: 5),
-                                                Icon(
-                                                  message['read_at'] == null
-                                                      ? Icons.done
-                                                      : Icons.done_all,
-                                                  size: 15,
-                                                  color: Colors.white70,
-                                                ),
-                                              ],
+                                              const SizedBox(height: 4),
                                             ],
-                                          ),
+                                            Text(
+                                              message['body']?.toString() ?? '',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                height: 1.3,
+                                                color: mine
+                                                    ? Colors.white
+                                                    : const Color(0xFF1F2937),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Align(
+                                              alignment: Alignment.centerRight,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    _clock(
+                                                      message['created_at'],
+                                                    ),
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      color: mine
+                                                          ? Colors.white70
+                                                          : const Color(
+                                                              0xFF98A2B3,
+                                                            ),
+                                                    ),
+                                                  ),
+                                                  if (mine) ...[
+                                                    const SizedBox(width: 5),
+                                                    Icon(
+                                                      message['read_at'] == null
+                                                          ? Icons.done
+                                                          : Icons.done_all,
+                                                      size: 15,
+                                                      color: Colors.white70,
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 );
                               },
                             ),
