@@ -1,0 +1,105 @@
+name: Fix Alarm Dialog Scrolling V3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch alarm dialog and bump version
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("lib/screens/alarm_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          old1 = """          return AlertDialog(
+            title: const Text('Alarm auslösen'),"""
+          new1 = """          return AlertDialog(
+            scrollable: true,
+            title: const Text('Alarm auslösen'),"""
+
+          old2 = """            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column("""
+          new2 = """            content: SizedBox(
+              width: 520,
+              child: Column("""
+
+          old3 = """                  ],
+                ),
+              ),
+            ),
+            actions: ["""
+          new3 = """                  ],
+                ),
+            ),
+            actions: ["""
+
+          for label, old in [
+              ("AlertDialog", old1),
+              ("scroll wrapper start", old2),
+              ("scroll wrapper end", old3),
+          ]:
+              if old not in text:
+                  raise SystemExit(f"{label} target not found")
+
+          text = text.replace(old1, new1, 1)
+          text = text.replace(old2, new2, 1)
+          text = text.replace(old3, new3, 1)
+          path.write_text(text, encoding="utf-8")
+
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          p2, n = re.subn(
+              r"(?m)^version:\s*1\.0\.1\+3\s*$",
+              "version: 1.0.2+4",
+              p,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit("Expected version 1.0.1+3 not found in pubspec.yaml")
+          pubspec.write_text(p2, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format alarm screen
+        run: dart format lib/screens/alarm_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/alarm_screen.dart
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/alarm_screen.dart pubspec.yaml
+          git commit -m "Fix alarm dialog scrolling and bump version to 1.0.2+4"
+          git push origin main
