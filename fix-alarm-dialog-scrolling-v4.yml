@@ -1,0 +1,121 @@
+name: Fix Alarm Recipient Picker V4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch alarm dialog
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("lib/screens/alarm_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          anchor = "final result = await showDialog<Map<String, dynamic>>("
+          pos = text.find(anchor)
+          if pos == -1:
+              raise SystemExit("Alarm dialog anchor not found")
+
+          alert = text.find("return AlertDialog(", pos)
+          if alert == -1:
+              raise SystemExit("Alarm AlertDialog not found")
+
+          insert_at = alert + len("return AlertDialog(")
+          if "scrollable: true" not in text[alert:alert+120]:
+              text = text[:insert_at] + "\n            scrollable: true," + text[insert_at:]
+
+          # Remove the redundant inner SingleChildScrollView only inside this alarm dialog.
+          pos = text.find(anchor)
+          content_start = text.find("content: SizedBox(", pos)
+          actions = text.find("\n            actions: [", content_start)
+          if content_start == -1 or actions == -1:
+              raise SystemExit("Alarm dialog content/actions not found")
+
+          segment = text[content_start:actions]
+
+          wrapper = "child: SingleChildScrollView(\n                child: Column("
+          if wrapper in segment:
+              segment = segment.replace(
+                  wrapper,
+                  "child: Column(",
+                  1,
+              )
+
+              # Remove the matching extra close immediately before SizedBox close.
+              closing = """                  ],
+                ),
+              ),
+            ),"""
+              replacement = """                  ],
+                ),
+            ),"""
+              if closing not in segment:
+                  raise SystemExit("Inner scroll wrapper closing not found")
+              segment = segment.replace(closing, replacement, 1)
+
+          text = text[:content_start] + segment + text[actions:]
+
+          # Keep the recipient list part of the dialog's single scroll area.
+          text = text.replace(
+              "physics: const NeverScrollableScrollPhysics(),",
+              "physics: const NeverScrollableScrollPhysics(),",
+              1,
+          )
+
+          path.write_text(text, encoding="utf-8")
+
+          # Bump app version so the newly installed APK is unambiguous.
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          match = re.search(r"(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)\s*$", p)
+          if not match:
+              raise SystemExit("Version line not found")
+          major, minor, patch, build = map(int, match.groups())
+          new_version = f"{major}.{minor}.{patch + 1}+{build + 1}"
+          p = p[:match.start()] + f"version: {new_version}" + p[match.end():]
+          pubspec.write_text(p, encoding="utf-8")
+          print("New version:", new_version)
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/alarm_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/alarm_screen.dart
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/alarm_screen.dart pubspec.yaml
+          git commit -m "Fix alarm dialog scrolling"
+          git push origin main
