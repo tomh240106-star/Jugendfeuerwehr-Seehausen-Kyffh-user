@@ -234,146 +234,145 @@ class _AlarmScreenState extends State<AlarmScreen> {
           }
 
           return AlertDialog(
+            scrollable: true,
             title: const Text('Alarm auslösen'),
             content: SizedBox(
               width: 520,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Eltern sind grundsätzlich ausgeschlossen. Wähle aus, welche Jugendmitglieder und Ausbilder diesen Alarm erhalten sollen.',
-                      style: TextStyle(
-                        color: Color(0xFF667085),
-                      ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Eltern sind grundsätzlich ausgeschlossen. Wähle aus, welche Jugendmitglieder und Ausbilder diesen Alarm erhalten sollen.',
+                    style: TextStyle(
+                      color: Color(0xFF667085),
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: titleController,
-                      decoration: const InputDecoration(
-                        labelText: 'Titel',
-                        border: OutlineInputBorder(),
-                      ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    decoration: const InputDecoration(
+                      labelText: 'Titel',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: locationController,
-                      decoration: const InputDecoration(
-                        labelText: 'Treffpunkt',
-                        border: OutlineInputBorder(),
-                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: locationController,
+                    decoration: const InputDecoration(
+                      labelText: 'Treffpunkt',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descriptionController,
-                      minLines: 2,
-                      maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Beschreibung (optional)',
-                        border: OutlineInputBorder(),
-                      ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descriptionController,
+                    minLines: 2,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: 'Beschreibung (optional)',
+                      border: OutlineInputBorder(),
                     ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Empfänger',
-                            style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w800,
-                              color: _navy,
-                            ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Empfänger',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: _navy,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            setDialogState(() {
-                              selectedIds
-                                ..clear()
-                                ..addAll(
-                                  eligible
-                                      .map((p) => p['id']?.toString() ?? '')
-                                      .where((id) => id.isNotEmpty),
-                                );
-                            });
-                          },
-                          child: const Text('Alle'),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setDialogState(selectedIds.clear);
-                          },
-                          child: const Text('Keine'),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      constraints: const BoxConstraints(),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: const Color(0xFFE3E8EE),
-                        ),
-                        borderRadius: BorderRadius.circular(14),
                       ),
-                      child: eligible.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text(
-                                'Keine weiteren Jugendmitglieder oder Ausbilder vorhanden.',
-                              ),
-                            )
-                          : ListView.separated(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: eligible.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, index) {
-                                final person = eligible[index];
-                                final id = person['id']?.toString() ?? '';
-                                final selected = selectedIds.contains(id);
-
-                                return CheckboxListTile(
-                                  value: selected,
-                                  dense: true,
-                                  controlAffinity:
-                                      ListTileControlAffinity.leading,
-                                  title: Text(
-                                    nameOf(person),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  subtitle: Text(roleOf(person)),
-                                  onChanged: id.isEmpty
-                                      ? null
-                                      : (value) {
-                                          setDialogState(() {
-                                            if (value == true) {
-                                              selectedIds.add(id);
-                                            } else {
-                                              selectedIds.remove(id);
-                                            }
-                                          });
-                                        },
-                                );
-                              },
+                      TextButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            selectedIds
+                              ..clear()
+                              ..addAll(
+                                eligible
+                                    .map((p) => p['id']?.toString() ?? '')
+                                    .where((id) => id.isNotEmpty),
+                              );
+                          });
+                        },
+                        child: const Text('Alle'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          setDialogState(selectedIds.clear);
+                        },
+                        child: const Text('Keine'),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    constraints: const BoxConstraints(),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: const Color(0xFFE3E8EE),
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: eligible.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text(
+                              'Keine weiteren Jugendmitglieder oder Ausbilder vorhanden.',
                             ),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${selectedIds.length} Empfänger ausgewählt',
-                        style: const TextStyle(
-                          color: Color(0xFF667085),
-                          fontWeight: FontWeight.w600,
-                        ),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: eligible.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (context, index) {
+                              final person = eligible[index];
+                              final id = person['id']?.toString() ?? '';
+                              final selected = selectedIds.contains(id);
+
+                              return CheckboxListTile(
+                                value: selected,
+                                dense: true,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                title: Text(
+                                  nameOf(person),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                subtitle: Text(roleOf(person)),
+                                onChanged: id.isEmpty
+                                    ? null
+                                    : (value) {
+                                        setDialogState(() {
+                                          if (value == true) {
+                                            selectedIds.add(id);
+                                          } else {
+                                            selectedIds.remove(id);
+                                          }
+                                        });
+                                      },
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${selectedIds.length} Empfänger ausgewählt',
+                      style: const TextStyle(
+                        color: Color(0xFF667085),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             actions: [
