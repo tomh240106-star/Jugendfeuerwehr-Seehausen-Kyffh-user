@@ -309,7 +309,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       ],
                     ),
                     Container(
-                      constraints: const BoxConstraints(maxHeight: 280),
+                      constraints: const BoxConstraints(),
                       decoration: BoxDecoration(
                         border: Border.all(
                           color: const Color(0xFFE3E8EE),
@@ -325,6 +325,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                             )
                           : ListView.separated(
                               shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
                               itemCount: eligible.length,
                               separatorBuilder: (_, __) =>
                                   const Divider(height: 1),
