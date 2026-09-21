@@ -1,0 +1,812 @@
+name: Add Ausbilder Stammblätter
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  add-feature:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Add Stammblätter screen and menu entry
+        shell: bash
+        run: |
+          cat > lib/screens/member_records_screen.dart <<'DART'
+          import 'package:flutter/material.dart';
+          import 'package:supabase_flutter/supabase_flutter.dart';
+
+          class MemberRecordsScreen extends StatefulWidget {
+            const MemberRecordsScreen({super.key});
+
+            @override
+            State<MemberRecordsScreen> createState() => _MemberRecordsScreenState();
+          }
+
+          class _MemberRecordsScreenState extends State<MemberRecordsScreen> {
+            static const _navy = Color(0xFF0A1F44);
+            static const _red = Color(0xFFE30613);
+
+            final _supabase = Supabase.instance.client;
+
+            bool _loading = true;
+            bool _isTrainer = false;
+            String? _error;
+            List<Map<String, dynamic>> _youth = [];
+            Map<String, Map<String, dynamic>> _recordsByYouth = {};
+
+            @override
+            void initState() {
+              super.initState();
+              _load();
+            }
+
+            Future<void> _load() async {
+              if (mounted) {
+                setState(() {
+                  _loading = true;
+                  _error = null;
+                });
+              }
+
+              try {
+                final user = _supabase.auth.currentUser;
+                if (user == null) throw Exception('Kein Benutzer angemeldet.');
+
+                final ownProfile = await _supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                final isTrainer = ownProfile?['role']?.toString() == 'ausbilder';
+
+                if (!isTrainer) {
+                  if (!mounted) return;
+                  setState(() {
+                    _isTrainer = false;
+                    _loading = false;
+                  });
+                  return;
+                }
+
+                final youthRows = await _supabase
+                    .from('profiles')
+                    .select('id,first_name,last_name,phone,role')
+                    .eq('role', 'jugendmitglied')
+                    .order('last_name')
+                    .order('first_name');
+
+                final recordRows = await _supabase
+                    .from('youth_member_records')
+                    .select();
+
+                final records = <String, Map<String, dynamic>>{};
+                for (final raw in recordRows) {
+                  final row = Map<String, dynamic>.from(raw);
+                  final youthId = row['youth_id']?.toString();
+                  if (youthId != null && youthId.isNotEmpty) {
+                    records[youthId] = row;
+                  }
+                }
+
+                if (!mounted) return;
+                setState(() {
+                  _isTrainer = true;
+                  _youth = List<Map<String, dynamic>>.from(youthRows);
+                  _recordsByYouth = records;
+                  _loading = false;
+                });
+              } catch (e) {
+                if (!mounted) return;
+                setState(() {
+                  _loading = false;
+                  _error = e.toString();
+                });
+              }
+            }
+
+            String _name(Map<String, dynamic> p) {
+              final first = p['first_name']?.toString().trim() ?? '';
+              final last = p['last_name']?.toString().trim() ?? '';
+              final value = '$first $last'.trim();
+              return value.isEmpty ? 'Jugendmitglied' : value;
+            }
+
+            String _dateText(dynamic value) {
+              if (value == null) return '';
+              final date = DateTime.tryParse(value.toString());
+              if (date == null) return '';
+              return '${date.day.toString().padLeft(2, '0')}.'
+                  '${date.month.toString().padLeft(2, '0')}.'
+                  '${date.year}';
+            }
+
+            Future<void> _openRecord(Map<String, dynamic> youth) async {
+              final id = youth['id']?.toString() ?? '';
+              if (id.isEmpty) return;
+
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => _MemberRecordEditor(
+                    youth: youth,
+                    initialRecord: _recordsByYouth[id],
+                  ),
+                ),
+              );
+
+              if (mounted) await _load();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: const Color(0xFFF3F5F7),
+                appBar: AppBar(
+                  title: const Text('Stammblätter'),
+                  backgroundColor: Colors.white,
+                  foregroundColor: _navy,
+                ),
+                body: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : !_isTrainer
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: Text(
+                                'Dieser Bereich ist ausschließlich für Ausbilder freigegeben.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: _navy,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView(
+                              padding: const EdgeInsets.all(18),
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(18),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: const Color(0xFFE3E8EE),
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Icon(
+                                        Icons.badge_outlined,
+                                        color: _red,
+                                        size: 30,
+                                      ),
+                                      SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Interne Stammblätter',
+                                              style: TextStyle(
+                                                color: _navy,
+                                                fontSize: 19,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                            SizedBox(height: 5),
+                                            Text(
+                                              'Nur Ausbilder können diese personenbezogenen Daten sehen und bearbeiten.',
+                                              style: TextStyle(
+                                                color: Color(0xFF667085),
+                                                height: 1.35,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    _error!,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                ],
+                                const SizedBox(height: 18),
+                                Text(
+                                  '${_youth.length} Jugendmitglieder',
+                                  style: const TextStyle(
+                                    color: _navy,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                if (_youth.isEmpty)
+                                  const Card(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(20),
+                                      child: Text(
+                                        'Es sind noch keine Jugendmitglieder vorhanden.',
+                                      ),
+                                    ),
+                                  ),
+                                ..._youth.map((youth) {
+                                  final id = youth['id']?.toString() ?? '';
+                                  final record = _recordsByYouth[id];
+                                  final birth = _dateText(record?['birth_date']);
+                                  final membership =
+                                      record?['membership_number']?.toString().trim() ??
+                                          '';
+
+                                  return Card(
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    child: ListTile(
+                                      leading: CircleAvatar(
+                                        backgroundColor:
+                                            const Color(0xFFFFE8EA),
+                                        foregroundColor: _red,
+                                        child: Text(
+                                          (_name(youth).isEmpty
+                                                  ? '?'
+                                                  : _name(youth)[0])
+                                              .toUpperCase(),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                      title: Text(
+                                        _name(youth),
+                                        style: const TextStyle(
+                                          color: _navy,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      subtitle: Text(
+                                        record == null
+                                            ? 'Noch kein Stammblatt angelegt'
+                                            : [
+                                                if (birth.isNotEmpty)
+                                                  'Geb.: $birth',
+                                                if (membership.isNotEmpty)
+                                                  'Nr.: $membership',
+                                                if (birth.isEmpty &&
+                                                    membership.isEmpty)
+                                                  'Stammblatt vorhanden',
+                                              ].join(' · '),
+                                      ),
+                                      trailing: Icon(
+                                        record == null
+                                            ? Icons.add_circle_outline
+                                            : Icons.chevron_right,
+                                        color: record == null ? _red : _navy,
+                                      ),
+                                      onTap: () => _openRecord(youth),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+              );
+            }
+          }
+
+          class _MemberRecordEditor extends StatefulWidget {
+            final Map<String, dynamic> youth;
+            final Map<String, dynamic>? initialRecord;
+
+            const _MemberRecordEditor({
+              required this.youth,
+              required this.initialRecord,
+            });
+
+            @override
+            State<_MemberRecordEditor> createState() => _MemberRecordEditorState();
+          }
+
+          class _MemberRecordEditorState extends State<_MemberRecordEditor> {
+            static const _navy = Color(0xFF0A1F44);
+            static const _red = Color(0xFFE30613);
+
+            final _supabase = Supabase.instance.client;
+            final _formKey = GlobalKey<FormState>();
+
+            late final TextEditingController _street;
+            late final TextEditingController _postalCode;
+            late final TextEditingController _city;
+            late final TextEditingController _email;
+            late final TextEditingController _membershipNumber;
+            late final TextEditingController _guardianName;
+            late final TextEditingController _guardianPhone;
+            late final TextEditingController _guardianEmail;
+            late final TextEditingController _emergencyName;
+            late final TextEditingController _emergencyPhone;
+            late final TextEditingController _clothingSize;
+            late final TextEditingController _helmetSize;
+            late final TextEditingController _notes;
+
+            DateTime? _birthDate;
+            DateTime? _entryDate;
+            bool _saving = false;
+
+            @override
+            void initState() {
+              super.initState();
+              final r = widget.initialRecord ?? const <String, dynamic>{};
+
+              TextEditingController c(String key) =>
+                  TextEditingController(text: r[key]?.toString() ?? '');
+
+              _street = c('street');
+              _postalCode = c('postal_code');
+              _city = c('city');
+              _email = c('email');
+              _membershipNumber = c('membership_number');
+              _guardianName = c('guardian_name');
+              _guardianPhone = c('guardian_phone');
+              _guardianEmail = c('guardian_email');
+              _emergencyName = c('emergency_contact_name');
+              _emergencyPhone = c('emergency_contact_phone');
+              _clothingSize = c('clothing_size');
+              _helmetSize = c('helmet_size');
+              _notes = c('notes');
+
+              _birthDate = DateTime.tryParse(r['birth_date']?.toString() ?? '');
+              _entryDate = DateTime.tryParse(r['entry_date']?.toString() ?? '');
+            }
+
+            @override
+            void dispose() {
+              for (final c in [
+                _street,
+                _postalCode,
+                _city,
+                _email,
+                _membershipNumber,
+                _guardianName,
+                _guardianPhone,
+                _guardianEmail,
+                _emergencyName,
+                _emergencyPhone,
+                _clothingSize,
+                _helmetSize,
+                _notes,
+              ]) {
+                c.dispose();
+              }
+              super.dispose();
+            }
+
+            String get _name {
+              final first =
+                  widget.youth['first_name']?.toString().trim() ?? '';
+              final last = widget.youth['last_name']?.toString().trim() ?? '';
+              return '$first $last'.trim();
+            }
+
+            String _date(DateTime? value) {
+              if (value == null) return 'Nicht angegeben';
+              return '${value.day.toString().padLeft(2, '0')}.'
+                  '${value.month.toString().padLeft(2, '0')}.'
+                  '${value.year}';
+            }
+
+            String? _isoDate(DateTime? value) {
+              if (value == null) return null;
+              return '${value.year.toString().padLeft(4, '0')}-'
+                  '${value.month.toString().padLeft(2, '0')}-'
+                  '${value.day.toString().padLeft(2, '0')}';
+            }
+
+            Future<void> _pickDate({
+              required DateTime? initial,
+              required ValueChanged<DateTime?> onChanged,
+              DateTime? lastDate,
+            }) async {
+              final result = await showDatePicker(
+                context: context,
+                initialDate: initial ?? DateTime.now(),
+                firstDate: DateTime(1990),
+                lastDate: lastDate ?? DateTime(DateTime.now().year + 5),
+                locale: const Locale('de', 'DE'),
+              );
+              if (result != null) onChanged(result);
+            }
+
+            Widget _sectionTitle(String text) {
+              return Padding(
+                padding: const EdgeInsets.only(top: 20, bottom: 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    text,
+                    style: const TextStyle(
+                      color: _navy,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            Widget _field(
+              TextEditingController controller,
+              String label, {
+              TextInputType? keyboardType,
+              int maxLines = 1,
+            }) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: TextFormField(
+                  controller: controller,
+                  keyboardType: keyboardType,
+                  maxLines: maxLines,
+                  decoration: InputDecoration(
+                    labelText: label,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              );
+            }
+
+            Widget _dateTile({
+              required String label,
+              required DateTime? value,
+              required VoidCallback onTap,
+              required VoidCallback onClear,
+            }) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  tileColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: const BorderSide(color: Color(0xFFD0D5DD)),
+                  ),
+                  title: Text(label),
+                  subtitle: Text(_date(value)),
+                  leading: const Icon(Icons.calendar_month_outlined),
+                  trailing: value == null
+                      ? const Icon(Icons.chevron_right)
+                      : IconButton(
+                          tooltip: 'Datum entfernen',
+                          onPressed: onClear,
+                          icon: const Icon(Icons.close),
+                        ),
+                  onTap: onTap,
+                ),
+              );
+            }
+
+            Future<void> _save() async {
+              if (_saving || !_formKey.currentState!.validate()) return;
+
+              final currentUser = _supabase.auth.currentUser;
+              if (currentUser == null) return;
+
+              setState(() => _saving = true);
+
+              String? clean(TextEditingController c) {
+                final value = c.text.trim();
+                return value.isEmpty ? null : value;
+              }
+
+              final values = <String, dynamic>{
+                'youth_id': widget.youth['id'],
+                'birth_date': _isoDate(_birthDate),
+                'street': clean(_street),
+                'postal_code': clean(_postalCode),
+                'city': clean(_city),
+                'email': clean(_email),
+                'entry_date': _isoDate(_entryDate),
+                'membership_number': clean(_membershipNumber),
+                'guardian_name': clean(_guardianName),
+                'guardian_phone': clean(_guardianPhone),
+                'guardian_email': clean(_guardianEmail),
+                'emergency_contact_name': clean(_emergencyName),
+                'emergency_contact_phone': clean(_emergencyPhone),
+                'clothing_size': clean(_clothingSize),
+                'helmet_size': clean(_helmetSize),
+                'notes': clean(_notes),
+                'updated_by': currentUser.id,
+                'updated_at': DateTime.now().toUtc().toIso8601String(),
+              };
+
+              try {
+                if (widget.initialRecord == null) {
+                  values['created_by'] = currentUser.id;
+                  await _supabase.from('youth_member_records').insert(values);
+                } else {
+                  await _supabase
+                      .from('youth_member_records')
+                      .update(values)
+                      .eq('youth_id', widget.youth['id']);
+                }
+
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Stammblatt gespeichert.')),
+                );
+                Navigator.of(context).pop();
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Stammblatt konnte nicht gespeichert werden: $e'),
+                  ),
+                );
+              } finally {
+                if (mounted) setState(() => _saving = false);
+              }
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              final profilePhone =
+                  widget.youth['phone']?.toString().trim() ?? '';
+
+              return Scaffold(
+                backgroundColor: const Color(0xFFF3F5F7),
+                appBar: AppBar(
+                  title: Text(
+                    _name.isEmpty ? 'Stammblatt' : _name,
+                  ),
+                  backgroundColor: Colors.white,
+                  foregroundColor: _navy,
+                ),
+                body: Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: const EdgeInsets.all(18),
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF4F5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFFFFC7CC),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person_outline, color: _red),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                profilePhone.isEmpty
+                                    ? 'Jugendmitglied: $_name'
+                                    : 'Jugendmitglied: $_name\nTelefon aus Profil: $profilePhone',
+                                style: const TextStyle(
+                                  color: _navy,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _sectionTitle('Persönliche Daten'),
+                      _dateTile(
+                        label: 'Geburtsdatum',
+                        value: _birthDate,
+                        onTap: () => _pickDate(
+                          initial: _birthDate,
+                          lastDate: DateTime.now(),
+                          onChanged: (value) =>
+                              setState(() => _birthDate = value),
+                        ),
+                        onClear: () => setState(() => _birthDate = null),
+                      ),
+                      _field(
+                        _email,
+                        'E-Mail Jugendmitglied',
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      _field(_street, 'Straße und Hausnummer'),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: _field(
+                              _postalCode,
+                              'PLZ',
+                              keyboardType: TextInputType.number,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 3,
+                            child: _field(_city, 'Ort'),
+                          ),
+                        ],
+                      ),
+                      _sectionTitle('Jugendfeuerwehr'),
+                      _dateTile(
+                        label: 'Eintrittsdatum',
+                        value: _entryDate,
+                        onTap: () => _pickDate(
+                          initial: _entryDate,
+                          onChanged: (value) =>
+                              setState(() => _entryDate = value),
+                        ),
+                        onClear: () => setState(() => _entryDate = null),
+                      ),
+                      _field(_membershipNumber, 'Mitglieds-/Dienstnummer'),
+                      Row(
+                        children: [
+                          Expanded(child: _field(_clothingSize, 'Kleidergröße')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _field(_helmetSize, 'Helmgröße')),
+                        ],
+                      ),
+                      _sectionTitle('Erziehungsberechtigte'),
+                      _field(_guardianName, 'Name'),
+                      _field(
+                        _guardianPhone,
+                        'Telefon',
+                        keyboardType: TextInputType.phone,
+                      ),
+                      _field(
+                        _guardianEmail,
+                        'E-Mail',
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      _sectionTitle('Notfallkontakt'),
+                      _field(_emergencyName, 'Name'),
+                      _field(
+                        _emergencyPhone,
+                        'Telefon',
+                        keyboardType: TextInputType.phone,
+                      ),
+                      _sectionTitle('Interne Bemerkungen'),
+                      _field(
+                        _notes,
+                        'Bemerkungen',
+                        maxLines: 5,
+                      ),
+                      const SizedBox(height: 8),
+                      FilledButton.icon(
+                        onPressed: _saving ? null : _save,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _red,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(52),
+                        ),
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.save_outlined),
+                        label: Text(
+                          _saving ? 'Speichern...' : 'Stammblatt speichern',
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+          DART
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("lib/screens/home_shell.dart")
+          text = path.read_text(encoding="utf-8")
+
+          import_anchor = "import 'members_screen.dart';"
+          new_import = "import 'member_records_screen.dart';"
+          if new_import not in text:
+              if import_anchor not in text:
+                  raise SystemExit("members_screen import anchor not found")
+              text = text.replace(
+                  import_anchor,
+                  import_anchor + "\\n" + new_import,
+                  1,
+              )
+
+          marker = """                    if (_profile?['role'] == 'ausbilder')
+                      _MoreTile(
+                        icon: Icons.groups_outlined,
+                        title: 'Mitgliederverwaltung',
+                        subtitle: 'Profile und Eltern-Kind-Verknüpfungen',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MembersScreen(),
+                            ),
+                          );
+                        },
+                      ),"""
+
+          tile = """
+                    if (_profile?['role'] == 'ausbilder')
+                      _MoreTile(
+                        icon: Icons.badge_outlined,
+                        title: 'Stammblätter',
+                        subtitle: 'Interne Daten der Jugendmitglieder',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MemberRecordsScreen(),
+                            ),
+                          );
+                        },
+                      ),"""
+
+          if "title: 'Stammblätter'" not in text:
+              if marker not in text:
+                  raise SystemExit("Mitgliederverwaltung menu anchor not found")
+              text = text.replace(marker, marker + tile, 1)
+
+          path.write_text(text, encoding="utf-8")
+
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          m = re.search(
+              r"(?m)^version:\\s*(\\d+)\\.(\\d+)\\.(\\d+)\\+(\\d+)\\s*$",
+              p,
+          )
+          if not m:
+              raise SystemExit("Version line not found")
+          major, minor, patch, build = map(int, m.groups())
+          new_version = f"{major}.{minor}.{patch + 1}+{build + 1}"
+          p = p[:m.start()] + f"version: {new_version}" + p[m.end():]
+          pubspec.write_text(p, encoding="utf-8")
+          print("New version:", new_version)
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/member_records_screen.dart lib/screens/home_shell.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/member_records_screen.dart lib/screens/home_shell.dart
+
+      - name: Commit feature
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/member_records_screen.dart lib/screens/home_shell.dart pubspec.yaml
+          git commit -m "Add trainer-only youth member records"
+          git push origin main
