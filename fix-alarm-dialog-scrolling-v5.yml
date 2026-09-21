@@ -1,0 +1,108 @@
+name: Fix Alarm Dialog Scrolling V5
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch alarm dialog robustly
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("lib/screens/alarm_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          anchor = "final result = await showDialog<Map<String, dynamic>>("
+          pos = text.find(anchor)
+          if pos == -1:
+              raise SystemExit("Alarm dialog anchor not found")
+
+          alert = text.find("return AlertDialog(", pos)
+          if alert == -1:
+              raise SystemExit("Alarm AlertDialog not found")
+
+          # Add native AlertDialog scrolling.
+          insertion = alert + len("return AlertDialog(")
+          if "scrollable: true" not in text[insertion:insertion + 120]:
+              text = text[:insertion] + "\n            scrollable: true," + text[insertion:]
+
+          # Locate only this dialog's content block.
+          pos = text.find(anchor)
+          content_start = text.find("content: SizedBox(", pos)
+          actions = text.find("\n            actions: [", content_start)
+          if content_start == -1 or actions == -1:
+              raise SystemExit("Alarm dialog content/actions not found")
+
+          segment = text[content_start:actions]
+
+          # Remove redundant inner SingleChildScrollView so there is only one
+          # scrollable surface on Android.
+          wrapper = "child: SingleChildScrollView(\n                child: Column("
+          if wrapper in segment:
+              segment = segment.replace(wrapper, "child: Column(", 1)
+
+              # Remove only the final closing paren belonging to
+              # SingleChildScrollView, just before SizedBox closes.
+              needle = "\n              ),"
+              cut = segment.rfind(needle)
+              if cut == -1:
+                  raise SystemExit("SingleChildScrollView closing not found")
+              segment = segment[:cut] + segment[cut + len(needle):]
+
+          text = text[:content_start] + segment + text[actions:]
+          path.write_text(text, encoding="utf-8")
+
+          # Bump version/build so the APK can be identified clearly.
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          m = re.search(r"(?m)^version:\s*(\d+)\.(\d+)\.(\d+)\+(\d+)\s*$", p)
+          if not m:
+              raise SystemExit("Version line not found")
+          major, minor, patch, build = map(int, m.groups())
+          new_version = f"{major}.{minor}.{patch + 1}+{build + 1}"
+          p = p[:m.start()] + f"version: {new_version}" + p[m.end():]
+          pubspec.write_text(p, encoding="utf-8")
+          print("New version:", new_version)
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/alarm_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/alarm_screen.dart
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/alarm_screen.dart pubspec.yaml
+          git commit -m "Fix alarm dialog scrolling"
+          git push origin main
