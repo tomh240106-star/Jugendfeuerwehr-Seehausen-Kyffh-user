@@ -90,7 +90,7 @@ class _AuthScreenState extends State<AuthScreen> {
         );
 
         _setMessage(
-          'Registrierung erfolgreich. Bitte prüfe deine E-Mails, falls eine Bestätigung erforderlich ist.',
+          'Registrierung erfolgreich. Nach einer eventuell erforderlichen E-Mail-Bestätigung muss dein Konto noch von mindestens einem Ausbilder freigegeben werden.',
           error: false,
         );
       } else {

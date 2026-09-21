@@ -43,7 +43,8 @@ class _MembersScreenState extends State<MembersScreen> {
 
       final profiles = await _supabase
           .from('profiles')
-          .select('id,first_name,last_name,role,phone,notifications_enabled')
+          .select(
+              'id,first_name,last_name,role,phone,notifications_enabled,approval_status,approved_at')
           .order('last_name')
           .order('first_name');
 
@@ -693,6 +694,83 @@ class _ProfileEditorState extends State<_ProfileEditor> {
     _notificationsEnabled = widget.profile['notifications_enabled'] == true;
   }
 
+  Future<void> _approveAccount() async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) return;
+
+    try {
+      await _supabase.from('profiles').update({
+        'approval_status': 'approved',
+        'approved_by': currentUser.id,
+        'approved_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', widget.profile['id']);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Konto wurde freigegeben.')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Freigabe fehlgeschlagen: $e')),
+      );
+    }
+  }
+
+  Future<void> _deleteAccount() async {
+    final role = widget.profile['role']?.toString();
+    if (role != 'jugendmitglied' && role != 'eltern') return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Mitglied entfernen?'),
+        content: const Text(
+          'Das Mitglied wird vollständig aus der App entfernt. '
+          'Das Konto kann sich danach nicht mehr anmelden.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Color(0xFFE30613),
+            ),
+            child: const Text('Entfernen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final response = await _supabase.functions.invoke(
+        'delete-member',
+        body: {'target_user_id': widget.profile['id']},
+      );
+
+      if (response.status >= 400) {
+        throw Exception('Serverfehler ${response.status}');
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mitglied wurde entfernt.')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Entfernen fehlgeschlagen: $e')),
+      );
+    }
+  }
+
   Future<void> _save() async {
     if (_firstName.text.trim().isEmpty || _lastName.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -838,6 +916,38 @@ class _ProfileEditorState extends State<_ProfileEditor> {
                 label: const Text('Speichern'),
               ),
             ),
+            if (widget.canChangeRole &&
+                (widget.profile['role']?.toString() == 'jugendmitglied' ||
+                    widget.profile['role']?.toString() == 'eltern')) ...[
+              if (widget.profile['approval_status']?.toString() !=
+                  'approved') ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _saving ? null : _approveAccount,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF13A05B),
+                    ),
+                    icon: const Icon(Icons.verified_user_outlined),
+                    label: const Text('Konto freigeben'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : _deleteAccount,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFE30613),
+                    side: const BorderSide(color: Color(0xFFE30613)),
+                  ),
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Mitglied entfernen'),
+                ),
+              ),
+            ],
           ],
         ),
       ),
