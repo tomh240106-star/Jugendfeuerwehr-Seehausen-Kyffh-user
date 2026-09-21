@@ -1,0 +1,76 @@
+name: Fix Android Alarm Recipient Scrolling V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch alarm recipient scrolling
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/screens/alarm_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          old_constraint = "constraints: const BoxConstraints(maxHeight: 280),"
+          old_list = "ListView.separated(\n                              shrinkWrap: true,"
+
+          if old_constraint not in text:
+              raise SystemExit("Alarm recipient height constraint not found.")
+          if old_list not in text:
+              raise SystemExit("Alarm recipient ListView not found.")
+
+          text = text.replace(
+              old_constraint,
+              "constraints: const BoxConstraints(),",
+              1,
+          )
+          text = text.replace(
+              old_list,
+              "ListView.separated(\n                              shrinkWrap: true,\n                              physics: const NeverScrollableScrollPhysics(),",
+              1,
+          )
+
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format file
+        run: dart format lib/screens/alarm_screen.dart
+
+      - name: Analyze alarm screen
+        run: flutter analyze lib/screens/alarm_screen.dart
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/alarm_screen.dart
+          git commit -m "Fix Android alarm recipient scrolling"
+          git push origin main
