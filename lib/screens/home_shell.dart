@@ -9,6 +9,7 @@ import 'alarm_screen.dart';
 import 'documents_screen.dart';
 import 'events_screen.dart';
 import 'members_screen.dart';
+import 'member_records_screen.dart';
 import 'legal_screen.dart';
 import 'messages_screen.dart';
 import 'training_plans_screen.dart';
@@ -1326,6 +1327,19 @@ class _MoreScreenState extends State<_MoreScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const MembersScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    if (_profile?['role'] == 'ausbilder')
+                      _MoreTile(
+                        icon: Icons.badge_outlined,
+                        title: 'Stammblätter',
+                        subtitle: 'Interne Daten der Jugendmitglieder',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const MemberRecordsScreen(),
                             ),
                           );
                         },
