@@ -1,0 +1,122 @@
+name: Add Member Approval And Removal V4
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch app
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+
+          approval_code = base64.b64decode("CmNsYXNzIEFwcHJvdmFsR2F0ZSBleHRlbmRzIFN0YXRlZnVsV2lkZ2V0IHsKICBjb25zdCBBcHByb3ZhbEdhdGUoe3N1cGVyLmtleX0pOwoKICBAb3ZlcnJpZGUKICBTdGF0ZTxBcHByb3ZhbEdhdGU+IGNyZWF0ZVN0YXRlKCkgPT4gX0FwcHJvdmFsR2F0ZVN0YXRlKCk7Cn0KCmNsYXNzIF9BcHByb3ZhbEdhdGVTdGF0ZSBleHRlbmRzIFN0YXRlPEFwcHJvdmFsR2F0ZT4gewogIGZpbmFsIF9zdXBhYmFzZSA9IFN1cGFiYXNlLmluc3RhbmNlLmNsaWVudDsKICBUaW1lcj8gX3RpbWVyOwogIGJvb2wgX2xvYWRpbmcgPSB0cnVlOwogIGJvb2wgX2FwcHJvdmVkID0gZmFsc2U7CiAgU3RyaW5nIF9zdGF0dXMgPSAncGVuZGluZyc7CiAgU3RyaW5nPyBfZXJyb3I7CgogIEBvdmVycmlkZQogIHZvaWQgaW5pdFN0YXRlKCkgewogICAgc3VwZXIuaW5pdFN0YXRlKCk7CiAgICBfY2hlY2tBcHByb3ZhbCgpOwogICAgX3RpbWVyID0gVGltZXIucGVyaW9kaWMoCiAgICAgIGNvbnN0IER1cmF0aW9uKHNlY29uZHM6IDUpLAogICAgICAoXykgPT4gX2NoZWNrQXBwcm92YWwoc2lsZW50OiB0cnVlKSwKICAgICk7CiAgfQoKICBAb3ZlcnJpZGUKICB2b2lkIGRpc3Bvc2UoKSB7CiAgICBfdGltZXI/LmNhbmNlbCgpOwogICAgc3VwZXIuZGlzcG9zZSgpOwogIH0KCiAgRnV0dXJlPHZvaWQ+IF9jaGVja0FwcHJvdmFsKHtib29sIHNpbGVudCA9IGZhbHNlfSkgYXN5bmMgewogICAgZmluYWwgdXNlciA9IF9zdXBhYmFzZS5hdXRoLmN1cnJlbnRVc2VyOwogICAgaWYgKHVzZXIgPT0gbnVsbCkgcmV0dXJuOwoKICAgIGlmICghc2lsZW50ICYmIG1vdW50ZWQpIHsKICAgICAgc2V0U3RhdGUoKCkgewogICAgICAgIF9sb2FkaW5nID0gdHJ1ZTsKICAgICAgICBfZXJyb3IgPSBudWxsOwogICAgICB9KTsKICAgIH0KCiAgICB0cnkgewogICAgICBmaW5hbCBwcm9maWxlID0gYXdhaXQgX3N1cGFiYXNlCiAgICAgICAgICAuZnJvbSgncHJvZmlsZXMnKQogICAgICAgICAgLnNlbGVjdCgnYXBwcm92YWxfc3RhdHVzJykKICAgICAgICAgIC5lcSgnaWQnLCB1c2VyLmlkKQogICAgICAgICAgLm1heWJlU2luZ2xlKCk7CgogICAgICBmaW5hbCBzdGF0dXMgPSBwcm9maWxlP1snYXBwcm92YWxfc3RhdHVzJ10/LnRvU3RyaW5nKCkgPz8gJ3BlbmRpbmcnOwoKICAgICAgaWYgKCFtb3VudGVkKSByZXR1cm47CiAgICAgIHNldFN0YXRlKCgpIHsKICAgICAgICBfc3RhdHVzID0gc3RhdHVzOwogICAgICAgIF9hcHByb3ZlZCA9IHN0YXR1cyA9PSAnYXBwcm92ZWQnOwogICAgICAgIF9sb2FkaW5nID0gZmFsc2U7CiAgICAgICAgX2Vycm9yID0gbnVsbDsKICAgICAgfSk7CiAgICB9IGNhdGNoIChlKSB7CiAgICAgIGlmICghbW91bnRlZCkgcmV0dXJuOwogICAgICBzZXRTdGF0ZSgoKSB7CiAgICAgICAgX2xvYWRpbmcgPSBmYWxzZTsKICAgICAgICBfZXJyb3IgPSBlLnRvU3RyaW5nKCk7CiAgICAgIH0pOwogICAgfQogIH0KCiAgQG92ZXJyaWRlCiAgV2lkZ2V0IGJ1aWxkKEJ1aWxkQ29udGV4dCBjb250ZXh0KSB7CiAgICBpZiAoX2xvYWRpbmcpIHsKICAgICAgcmV0dXJuIGNvbnN0IFNjYWZmb2xkKAogICAgICAgIGJvZHk6IENlbnRlcihjaGlsZDogQ2lyY3VsYXJQcm9ncmVzc0luZGljYXRvcigpKSwKICAgICAgKTsKICAgIH0KCiAgICBpZiAoX2FwcHJvdmVkKSByZXR1cm4gY29uc3QgSG9tZVNoZWxsKCk7CgogICAgZmluYWwgcmVqZWN0ZWQgPSBfc3RhdHVzID09ICdyZWplY3RlZCc7CgogICAgcmV0dXJuIFNjYWZmb2xkKAogICAgICBiYWNrZ3JvdW5kQ29sb3I6IGNvbnN0IENvbG9yKDB4RkZGM0Y1RjcpLAogICAgICBib2R5OiBTYWZlQXJlYSgKICAgICAgICBjaGlsZDogQ2VudGVyKAogICAgICAgICAgY2hpbGQ6IFNpbmdsZUNoaWxkU2Nyb2xsVmlldygKICAgICAgICAgICAgcGFkZGluZzogY29uc3QgRWRnZUluc2V0cy5hbGwoMjQpLAogICAgICAgICAgICBjaGlsZDogQ29uc3RyYWluZWRCb3goCiAgICAgICAgICAgICAgY29uc3RyYWludHM6IGNvbnN0IEJveENvbnN0cmFpbnRzKG1heFdpZHRoOiA1MjApLAogICAgICAgICAgICAgIGNoaWxkOiBDYXJkKAogICAgICAgICAgICAgICAgY2hpbGQ6IFBhZGRpbmcoCiAgICAgICAgICAgICAgICAgIHBhZGRpbmc6IGNvbnN0IEVkZ2VJbnNldHMuYWxsKDI0KSwKICAgICAgICAgICAgICAgICAgY2hpbGQ6IENvbHVtbigKICAgICAgICAgICAgICAgICAgICBtYWluQXhpc1NpemU6IE1haW5BeGlzU2l6ZS5taW4sCiAgICAgICAgICAgICAgICAgICAgY2hpbGRyZW46IFsKICAgICAgICAgICAgICAgICAgICAgIEljb24oCiAgICAgICAgICAgICAgICAgICAgICAgIHJlamVjdGVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA/IEljb25zLmJsb2NrX291dGxpbmVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA6IEljb25zLmhvdXJnbGFzc190b3Bfb3V0bGluZWQsCiAgICAgICAgICAgICAgICAgICAgICAgIHNpemU6IDY4LAogICAgICAgICAgICAgICAgICAgICAgICBjb2xvcjogcmVqZWN0ZWQKICAgICAgICAgICAgICAgICAgICAgICAgICAgID8gY29uc3QgQ29sb3IoMHhGRkUzMDYxMykKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDogY29uc3QgQ29sb3IoMHhGRkZGOEEwMCksCiAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAxNiksCiAgICAgICAgICAgICAgICAgICAgICBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICByZWplY3RlZAogICAgICAgICAgICAgICAgICAgICAgICAgICAgPyAnWnVnYW5nIG5pY2h0IGZyZWlnZWdlYmVuJwogICAgICAgICAgICAgICAgICAgICAgICAgICAgOiAnRnJlaWdhYmUgZHVyY2ggQXVzYmlsZGVyIGVyZm9yZGVybGljaCcsCiAgICAgICAgICAgICAgICAgICAgICAgIHRleHRBbGlnbjogVGV4dEFsaWduLmNlbnRlciwKICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IGNvbnN0IFRleHRTdHlsZSgKICAgICAgICAgICAgICAgICAgICAgICAgICBjb2xvcjogQ29sb3IoMHhGRjBBMUY0NCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgZm9udFNpemU6IDIyLAogICAgICAgICAgICAgICAgICAgICAgICAgIGZvbnRXZWlnaHQ6IEZvbnRXZWlnaHQudzkwMCwKICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDEwKSwKICAgICAgICAgICAgICAgICAgICAgIFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAgIHJlamVjdGVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA/ICdEaWVzZXMgS29udG8gd3VyZGUgbmljaHQgZsO8ciBkaWUgSnVnZW5kZmV1ZXJ3ZWhyLUFwcCBmcmVpZ2VnZWJlbi4nCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA6ICdEZWluIEtvbnRvIHd1cmRlIGVyc3RlbGx0LiBNaW5kZXN0ZW5zIGVpbiBBdXNiaWxkZXIgbXVzcyBlcyBmcmVpZ2ViZW4sIGJldm9yIGR1IGRpZSBBcHAgbnV0emVuIGthbm5zdC4nLAogICAgICAgICAgICAgICAgICAgICAgICB0ZXh0QWxpZ246IFRleHRBbGlnbi5jZW50ZXIsCiAgICAgICAgICAgICAgICAgICAgICAgIHN0eWxlOiBjb25zdCBUZXh0U3R5bGUoCiAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IENvbG9yKDB4RkY2NjcwODUpLAogICAgICAgICAgICAgICAgICAgICAgICAgIGhlaWdodDogMS40LAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgIGlmIChfZXJyb3IgIT0gbnVsbCkgLi4uWwogICAgICAgICAgICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDEyKSwKICAgICAgICAgICAgICAgICAgICAgICAgVGV4dCgKICAgICAgICAgICAgICAgICAgICAgICAgICBfZXJyb3IhLAogICAgICAgICAgICAgICAgICAgICAgICAgIHRleHRBbGlnbjogVGV4dEFsaWduLmNlbnRlciwKICAgICAgICAgICAgICAgICAgICAgICAgICBzdHlsZTogY29uc3QgVGV4dFN0eWxlKGNvbG9yOiBDb2xvcigweEZGQjQyMzE4KSksCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAyMCksCiAgICAgICAgICAgICAgICAgICAgICBpZiAoIXJlamVjdGVkKQogICAgICAgICAgICAgICAgICAgICAgICBTaXplZEJveCgKICAgICAgICAgICAgICAgICAgICAgICAgICB3aWR0aDogZG91YmxlLmluZmluaXR5LAogICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBGaWxsZWRCdXR0b24uaWNvbigKICAgICAgICAgICAgICAgICAgICAgICAgICAgIG9uUHJlc3NlZDogKCkgPT4gX2NoZWNrQXBwcm92YWwoKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGljb246IGNvbnN0IEljb24oSWNvbnMucmVmcmVzaCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBsYWJlbDogY29uc3QgVGV4dCgnRnJlaWdhYmUgcHLDvGZlbicpLAogICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDgpLAogICAgICAgICAgICAgICAgICAgICAgVGV4dEJ1dHRvbi5pY29uKAogICAgICAgICAgICAgICAgICAgICAgICBvblByZXNzZWQ6ICgpID0+IF9zdXBhYmFzZS5hdXRoLnNpZ25PdXQoKSwKICAgICAgICAgICAgICAgICAgICAgICAgaWNvbjogY29uc3QgSWNvbihJY29ucy5sb2dvdXQpLAogICAgICAgICAgICAgICAgICAgICAgICBsYWJlbDogY29uc3QgVGV4dCgnQWJtZWxkZW4nKSwKICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgKSwKICAgICAgICAgICksCiAgICAgICAgKSwKICAgICAgKSwKICAgICk7CiAgfQp9Cg==").decode()
+          helper_code = base64.b64decode("ICBGdXR1cmU8dm9pZD4gX2FwcHJvdmVBY2NvdW50KCkgYXN5bmMgewogICAgZmluYWwgY3VycmVudFVzZXIgPSBfc3VwYWJhc2UuYXV0aC5jdXJyZW50VXNlcjsKICAgIGlmIChjdXJyZW50VXNlciA9PSBudWxsKSByZXR1cm47CgogICAgdHJ5IHsKICAgICAgYXdhaXQgX3N1cGFiYXNlLmZyb20oJ3Byb2ZpbGVzJykudXBkYXRlKHsKICAgICAgICAnYXBwcm92YWxfc3RhdHVzJzogJ2FwcHJvdmVkJywKICAgICAgICAnYXBwcm92ZWRfYnknOiBjdXJyZW50VXNlci5pZCwKICAgICAgICAnYXBwcm92ZWRfYXQnOiBEYXRlVGltZS5ub3coKS50b1V0YygpLnRvSXNvODYwMVN0cmluZygpLAogICAgICB9KS5lcSgnaWQnLCB3aWRnZXQucHJvZmlsZVsnaWQnXSk7CgogICAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKICAgICAgU2NhZmZvbGRNZXNzZW5nZXIub2YoY29udGV4dCkuc2hvd1NuYWNrQmFyKAogICAgICAgIGNvbnN0IFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ0tvbnRvIHd1cmRlIGZyZWlnZWdlYmVuLicpKSwKICAgICAgKTsKICAgICAgTmF2aWdhdG9yLnBvcChjb250ZXh0LCB0cnVlKTsKICAgIH0gY2F0Y2ggKGUpIHsKICAgICAgaWYgKCFtb3VudGVkKSByZXR1cm47CiAgICAgIFNjYWZmb2xkTWVzc2VuZ2VyLm9mKGNvbnRleHQpLnNob3dTbmFja0JhcigKICAgICAgICBTbmFja0Jhcihjb250ZW50OiBUZXh0KCdGcmVpZ2FiZSBmZWhsZ2VzY2hsYWdlbjogJGUnKSksCiAgICAgICk7CiAgICB9CiAgfQoKICBGdXR1cmU8dm9pZD4gX2RlbGV0ZUFjY291bnQoKSBhc3luYyB7CiAgICBmaW5hbCByb2xlID0gd2lkZ2V0LnByb2ZpbGVbJ3JvbGUnXT8udG9TdHJpbmcoKTsKICAgIGlmIChyb2xlICE9ICdqdWdlbmRtaXRnbGllZCcgJiYgcm9sZSAhPSAnZWx0ZXJuJykgcmV0dXJuOwoKICAgIGZpbmFsIGZpcnN0ID0gd2lkZ2V0LnByb2ZpbGVbJ2ZpcnN0X25hbWUnXT8udG9TdHJpbmcoKS50cmltKCkgPz8gJyc7CiAgICBmaW5hbCBsYXN0ID0gd2lkZ2V0LnByb2ZpbGVbJ2xhc3RfbmFtZSddPy50b1N0cmluZygpLnRyaW0oKSA/PyAnJzsKICAgIGZpbmFsIG5hbWUgPSAnJGZpcnN0ICRsYXN0Jy50cmltKCk7CgogICAgZmluYWwgY29uZmlybWVkID0gYXdhaXQgc2hvd0RpYWxvZzxib29sPigKICAgICAgY29udGV4dDogY29udGV4dCwKICAgICAgYnVpbGRlcjogKGRpYWxvZ0NvbnRleHQpID0+IEFsZXJ0RGlhbG9nKAogICAgICAgIHRpdGxlOiBjb25zdCBUZXh0KCdNaXRnbGllZCBlbnRmZXJuZW4/JyksCiAgICAgICAgY29udGVudDogVGV4dCgKICAgICAgICAgICcke25hbWUuaXNFbXB0eSA/ICdEaWVzZXMgTWl0Z2xpZWQnIDogbmFtZX0gd2lyZCB2b2xsc3TDpG5kaWcgYXVzICcKICAgICAgICAgICdkZXIgQXBwIGVudGZlcm50LiBEYXMgS29udG8ga2FubiBzaWNoIGRhbmFjaCBuaWNodCBtZWhyIGFubWVsZGVuLicsCiAgICAgICAgKSwKICAgICAgICBhY3Rpb25zOiBbCiAgICAgICAgICBUZXh0QnV0dG9uKAogICAgICAgICAgICBvblByZXNzZWQ6ICgpID0+IE5hdmlnYXRvci5wb3AoZGlhbG9nQ29udGV4dCwgZmFsc2UpLAogICAgICAgICAgICBjaGlsZDogY29uc3QgVGV4dCgnQWJicmVjaGVuJyksCiAgICAgICAgICApLAogICAgICAgICAgRmlsbGVkQnV0dG9uKAogICAgICAgICAgICBvblByZXNzZWQ6ICgpID0+IE5hdmlnYXRvci5wb3AoZGlhbG9nQ29udGV4dCwgdHJ1ZSksCiAgICAgICAgICAgIHN0eWxlOiBGaWxsZWRCdXR0b24uc3R5bGVGcm9tKAogICAgICAgICAgICAgIGJhY2tncm91bmRDb2xvcjogY29uc3QgQ29sb3IoMHhGRkUzMDYxMyksCiAgICAgICAgICAgICksCiAgICAgICAgICAgIGNoaWxkOiBjb25zdCBUZXh0KCdFbnRmZXJuZW4nKSwKICAgICAgICAgICksCiAgICAgICAgXSwKICAgICAgKSwKICAgICk7CgogICAgaWYgKGNvbmZpcm1lZCAhPSB0cnVlKSByZXR1cm47CgogICAgdHJ5IHsKICAgICAgZmluYWwgcmVzcG9uc2UgPSBhd2FpdCBfc3VwYWJhc2UuZnVuY3Rpb25zLmludm9rZSgKICAgICAgICAnZGVsZXRlLW1lbWJlcicsCiAgICAgICAgYm9keTogeyd0YXJnZXRfdXNlcl9pZCc6IHdpZGdldC5wcm9maWxlWydpZCddfSwKICAgICAgKTsKCiAgICAgIGlmIChyZXNwb25zZS5zdGF0dXMgPj0gNDAwKSB7CiAgICAgICAgdGhyb3cgRXhjZXB0aW9uKCdTZXJ2ZXJmZWhsZXIgJHtyZXNwb25zZS5zdGF0dXN9Jyk7CiAgICAgIH0KCiAgICAgIGlmICghbW91bnRlZCkgcmV0dXJuOwogICAgICBTY2FmZm9sZE1lc3Nlbmdlci5vZihjb250ZXh0KS5zaG93U25hY2tCYXIoCiAgICAgICAgY29uc3QgU25hY2tCYXIoY29udGVudDogVGV4dCgnTWl0Z2xpZWQgd3VyZGUgZW50ZmVybnQuJykpLAogICAgICApOwogICAgICBOYXZpZ2F0b3IucG9wKGNvbnRleHQsIHRydWUpOwogICAgfSBjYXRjaCAoZSkgewogICAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKICAgICAgU2NhZmZvbGRNZXNzZW5nZXIub2YoY29udGV4dCkuc2hvd1NuYWNrQmFyKAogICAgICAgIFNuYWNrQmFyKGNvbnRlbnQ6IFRleHQoJ0VudGZlcm5lbiBmZWhsZ2VzY2hsYWdlbjogJGUnKSksCiAgICAgICk7CiAgICB9CiAgfQoK").decode()
+          action_buttons = base64.b64decode("CiAgICAgICAgICAgIGlmICh3aWRnZXQuY2FuQ2hhbmdlUm9sZSAmJgogICAgICAgICAgICAgICAgKHdpZGdldC5wcm9maWxlWydyb2xlJ10/LnRvU3RyaW5nKCkgPT0gJ2p1Z2VuZG1pdGdsaWVkJyB8fAogICAgICAgICAgICAgICAgICAgIHdpZGdldC5wcm9maWxlWydyb2xlJ10/LnRvU3RyaW5nKCkgPT0gJ2VsdGVybicpKSAuLi5bCiAgICAgICAgICAgICAgaWYgKHdpZGdldC5wcm9maWxlWydhcHByb3ZhbF9zdGF0dXMnXT8udG9TdHJpbmcoKSAhPSAnYXBwcm92ZWQnKSAuLi5bCiAgICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDEwKSwKICAgICAgICAgICAgICAgIFNpemVkQm94KAogICAgICAgICAgICAgICAgICB3aWR0aDogZG91YmxlLmluZmluaXR5LAogICAgICAgICAgICAgICAgICBjaGlsZDogRmlsbGVkQnV0dG9uLmljb24oCiAgICAgICAgICAgICAgICAgICAgb25QcmVzc2VkOiBfc2F2aW5nID8gbnVsbCA6IF9hcHByb3ZlQWNjb3VudCwKICAgICAgICAgICAgICAgICAgICBzdHlsZTogRmlsbGVkQnV0dG9uLnN0eWxlRnJvbSgKICAgICAgICAgICAgICAgICAgICAgIGJhY2tncm91bmRDb2xvcjogY29uc3QgQ29sb3IoMHhGRjEzQTA1QiksCiAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICBpY29uOiBjb25zdCBJY29uKEljb25zLnZlcmlmaWVkX3VzZXJfb3V0bGluZWQpLAogICAgICAgICAgICAgICAgICAgIGxhYmVsOiBjb25zdCBUZXh0KCdLb250byBmcmVpZ2ViZW4nKSwKICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDEwKSwKICAgICAgICAgICAgICBTaXplZEJveCgKICAgICAgICAgICAgICAgIHdpZHRoOiBkb3VibGUuaW5maW5pdHksCiAgICAgICAgICAgICAgICBjaGlsZDogT3V0bGluZWRCdXR0b24uaWNvbigKICAgICAgICAgICAgICAgICAgb25QcmVzc2VkOiBfc2F2aW5nID8gbnVsbCA6IF9kZWxldGVBY2NvdW50LAogICAgICAgICAgICAgICAgICBzdHlsZTogT3V0bGluZWRCdXR0b24uc3R5bGVGcm9tKAogICAgICAgICAgICAgICAgICAgIGZvcmVncm91bmRDb2xvcjogY29uc3QgQ29sb3IoMHhGRkUzMDYxMyksCiAgICAgICAgICAgICAgICAgICAgc2lkZTogY29uc3QgQm9yZGVyU2lkZShjb2xvcjogQ29sb3IoMHhGRkUzMDYxMykpLAogICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICBpY29uOiBjb25zdCBJY29uKEljb25zLmRlbGV0ZV9vdXRsaW5lKSwKICAgICAgICAgICAgICAgICAgbGFiZWw6IGNvbnN0IFRleHQoJ01pdGdsaWVkIGVudGZlcm5lbicpLAogICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICApLAogICAgICAgICAgICBdLAo=").decode()
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} not found")
+              return text.replace(old, new, 1)
+
+          main = Path("lib/main.dart")
+          text = main.read_text(encoding="utf-8")
+          if "import 'dart:async';" not in text:
+              text = "import 'dart:async';\n\n" + text
+          if "return const ApprovalGate();" not in text:
+              text = replace_once(
+                  text,
+                  "        return const HomeShell();",
+                  "        return const ApprovalGate();",
+                  "AuthGate HomeShell return",
+              )
+          if "class ApprovalGate extends StatefulWidget" not in text:
+              text += approval_code
+          main.write_text(text, encoding="utf-8")
+
+          auth = Path("lib/screens/auth_screen.dart")
+          text = auth.read_text(encoding="utf-8")
+          old_sentence = "Registrierung erfolgreich. Bitte prüfe deine E-Mails, falls eine Bestätigung erforderlich ist."
+          new_sentence = "Registrierung erfolgreich. Nach einer eventuell erforderlichen E-Mail-Bestätigung muss dein Konto noch von mindestens einem Ausbilder freigegeben werden."
+          if old_sentence in text:
+              text = text.replace(old_sentence, new_sentence, 1)
+          auth.write_text(text, encoding="utf-8")
+
+          members = Path("lib/screens/members_screen.dart")
+          text = members.read_text(encoding="utf-8")
+
+          old_select = ".select('id,first_name,last_name,role,phone,notifications_enabled')"
+          new_select = ".select('id,first_name,last_name,role,phone,notifications_enabled,approval_status,approved_at')"
+          if old_select in text:
+              text = text.replace(old_select, new_select, 1)
+
+          editor_anchor = "  Future<void> _save() async {"
+          if "Future<void> _approveAccount()" not in text:
+              if editor_anchor not in text:
+                  raise SystemExit("Profile editor save anchor not found")
+              text = text.replace(editor_anchor, helper_code + editor_anchor, 1)
+
+          save_button = """            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _saving ? null : _save,
+                icon: const Icon(Icons.save),
+                label: const Text('Speichern'),
+              ),
+            ),"""
+          if "Konto freigeben" not in text:
+              if save_button not in text:
+                  raise SystemExit("Profile editor save button not found")
+              text = text.replace(save_button, save_button + action_buttons, 1)
+
+          members.write_text(text, encoding="utf-8")
+
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          if "version: 1.0.3+5" in p:
+              p = p.replace("version: 1.0.3+5", "version: 1.0.4+6", 1)
+          elif "version: 1.0.4+6" not in p:
+              raise SystemExit("Expected app version not found")
+          pubspec.write_text(p, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/main.dart lib/screens/auth_screen.dart lib/screens/members_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/main.dart lib/screens/auth_screen.dart lib/screens/members_screen.dart
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/screens/auth_screen.dart lib/screens/members_screen.dart pubspec.yaml
+          git commit -m "Add member approval and removal"
+          git push origin main
