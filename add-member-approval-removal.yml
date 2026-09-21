@@ -1,0 +1,502 @@
+name: Add Member Approval And Removal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch app
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"{label} not found")
+              return text.replace(old, new, 1)
+
+          # main.dart: add approval gate before HomeShell.
+          main = Path("lib/main.dart")
+          text = main.read_text(encoding="utf-8")
+
+          if "import 'dart:async';" not in text:
+              text = "import 'dart:async';\n\n" + text
+
+          old_gate = """class AuthGate extends StatelessWidget {
+            const AuthGate({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              final client = Supabase.instance.client;
+
+              return StreamBuilder<AuthState>(
+                stream: client.auth.onAuthStateChange,
+                builder: (_, snapshot) {
+                  if (client.auth.currentSession == null) {
+                    return const AuthScreen();
+                  }
+
+                  return const HomeShell();
+                },
+              );
+            }
+          }
+          """
+
+          new_gate = """class AuthGate extends StatelessWidget {
+            const AuthGate({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              final client = Supabase.instance.client;
+
+              return StreamBuilder<AuthState>(
+                stream: client.auth.onAuthStateChange,
+                builder: (_, snapshot) {
+                  if (client.auth.currentSession == null) {
+                    return const AuthScreen();
+                  }
+
+                  return const ApprovalGate();
+                },
+              );
+            }
+          }
+
+          class ApprovalGate extends StatefulWidget {
+            const ApprovalGate({super.key});
+
+            @override
+            State<ApprovalGate> createState() => _ApprovalGateState();
+          }
+
+          class _ApprovalGateState extends State<ApprovalGate> {
+            final _supabase = Supabase.instance.client;
+            Timer? _timer;
+            bool _loading = true;
+            bool _approved = false;
+            String _status = 'pending';
+            String? _error;
+
+            @override
+            void initState() {
+              super.initState();
+              _checkApproval();
+              _timer = Timer.periodic(
+                const Duration(seconds: 5),
+                (_) => _checkApproval(silent: true),
+              );
+            }
+
+            @override
+            void dispose() {
+              _timer?.cancel();
+              super.dispose();
+            }
+
+            Future<void> _checkApproval({bool silent = false}) async {
+              final user = _supabase.auth.currentUser;
+              if (user == null) return;
+
+              if (!silent && mounted) {
+                setState(() {
+                  _loading = true;
+                  _error = null;
+                });
+              }
+
+              try {
+                final profile = await _supabase
+                    .from('profiles')
+                    .select('approval_status')
+                    .eq('id', user.id)
+                    .maybeSingle();
+
+                final status =
+                    profile?['approval_status']?.toString() ?? 'pending';
+
+                if (!mounted) return;
+                setState(() {
+                  _status = status;
+                  _approved = status == 'approved';
+                  _loading = false;
+                  _error = null;
+                });
+              } catch (e) {
+                if (!mounted) return;
+                setState(() {
+                  _loading = false;
+                  _error = e.toString();
+                });
+              }
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              if (_loading) {
+                return const Scaffold(
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              if (_approved) {
+                return const HomeShell();
+              }
+
+              final rejected = _status == 'rejected';
+
+              return Scaffold(
+                backgroundColor: const Color(0xFFF3F5F7),
+                body: SafeArea(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  rejected
+                                      ? Icons.block_outlined
+                                      : Icons.hourglass_top_outlined,
+                                  size: 68,
+                                  color: rejected
+                                      ? const Color(0xFFE30613)
+                                      : const Color(0xFFFF8A00),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  rejected
+                                      ? 'Zugang nicht freigegeben'
+                                      : 'Freigabe durch Ausbilder erforderlich',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFF0A1F44),
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  rejected
+                                      ? 'Dieses Konto wurde nicht für die Jugendfeuerwehr-App freigegeben.'
+                                      : 'Dein Konto wurde erstellt. Mindestens ein Ausbilder muss es freigeben, bevor du die App nutzen kannst.',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Color(0xFF667085),
+                                    height: 1.4,
+                                  ),
+                                ),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    _error!,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Color(0xFFB42318),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 20),
+                                if (!rejected)
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: FilledButton.icon(
+                                      onPressed: () => _checkApproval(),
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Freigabe prüfen'),
+                                    ),
+                                  ),
+                                const SizedBox(height: 8),
+                                TextButton.icon(
+                                  onPressed: () => _supabase.auth.signOut(),
+                                  icon: const Icon(Icons.logout),
+                                  label: const Text('Abmelden'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+          }
+          """
+
+          text = replace_once(text, old_gate, new_gate, "AuthGate block")
+          main.write_text(text, encoding="utf-8")
+
+          # auth_screen.dart: explain trainer approval after registration.
+          auth = Path("lib/screens/auth_screen.dart")
+          text = auth.read_text(encoding="utf-8")
+          old_msg = """        _setMessage(
+                  'Registrierung erfolgreich. Bitte prüfe deine E-Mails, falls eine Bestätigung erforderlich ist.',
+                  error: false,
+                );"""
+          new_msg = """        _setMessage(
+                  'Registrierung erfolgreich. Nach einer eventuell erforderlichen E-Mail-Bestätigung muss dein Konto noch von mindestens einem Ausbilder freigegeben werden.',
+                  error: false,
+                );"""
+          text = replace_once(text, old_msg, new_msg, "registration message")
+          auth.write_text(text, encoding="utf-8")
+
+          # members_screen.dart
+          members = Path("lib/screens/members_screen.dart")
+          text = members.read_text(encoding="utf-8")
+
+          old_select = """.select('id,first_name,last_name,role,phone,notifications_enabled')"""
+          new_select = """.select('id,first_name,last_name,role,phone,notifications_enabled,approval_status,approved_at')"""
+          text = replace_once(text, old_select, new_select, "profiles select")
+
+          methods_anchor = """  List<Map<String, dynamic>> get _filteredProfiles {"""
+          methods = """  int get _pendingApprovalCount => _profiles.where((p) {
+            final role = p['role']?.toString();
+            return (role == 'jugendmitglied' || role == 'eltern') &&
+                p['approval_status']?.toString() != 'approved';
+          }).length;
+
+          Future<void> _approveProfile(Map<String, dynamic> profile) async {
+            final user = _supabase.auth.currentUser;
+            if (user == null) return;
+
+            try {
+              await _supabase.from('profiles').update({
+                'approval_status': 'approved',
+                'approved_by': user.id,
+                'approved_at': DateTime.now().toUtc().toIso8601String(),
+              }).eq('id', profile['id']);
+
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${_name(profile)} wurde freigegeben.'),
+                ),
+              );
+              await _load();
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Freigabe fehlgeschlagen: $e')),
+              );
+            }
+          }
+
+          Future<void> _deleteProfile(Map<String, dynamic> profile) async {
+            final role = profile['role']?.toString();
+            if (role != 'jugendmitglied' && role != 'eltern') return;
+
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (dialogContext) => AlertDialog(
+                title: const Text('Mitglied entfernen?'),
+                content: Text(
+                  '${_name(profile)} wird vollständig aus der App entfernt. '
+                  'Das Konto kann sich danach nicht mehr anmelden.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Abbrechen'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFE30613),
+                    ),
+                    child: const Text('Entfernen'),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirmed != true) return;
+
+            try {
+              final response = await _supabase.functions.invoke(
+                'delete-member',
+                body: {
+                  'target_user_id': profile['id'],
+                },
+              );
+
+              if (response.status >= 400) {
+                throw Exception('Serverfehler ${response.status}');
+              }
+
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${_name(profile)} wurde entfernt.'),
+                ),
+              );
+              await _load();
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Entfernen fehlgeschlagen: $e')),
+              );
+            }
+          }
+
+          """
+          if methods_anchor not in text:
+              raise SystemExit("members methods anchor not found")
+          text = text.replace(methods_anchor, methods + methods_anchor, 1)
+
+          old_summary = """                            '${_profiles.length} Mitglieder · '
+                                    '${_links.length} Verknüpfungen',"""
+          new_summary = """                            '${_profiles.length} Mitglieder · '
+                                    '${_links.length} Verknüpfungen'
+                                    '${_pendingApprovalCount > 0 ? ' · $_pendingApprovalCount Freigaben offen' : ''}',"""
+          text = replace_once(text, old_summary, new_summary, "member summary")
+
+          old_role = """                                            Text(
+                                                      _roleLabel(role),
+                                                      style: TextStyle(
+                                                        color: accent,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 8),"""
+          new_role = """                                            Text(
+                                                      _roleLabel(role),
+                                                      style: TextStyle(
+                                                        color: accent,
+                                                        fontWeight: FontWeight.w700,
+                                                      ),
+                                                    ),
+                                                    if ((role == 'eltern' ||
+                                                            role == 'jugendmitglied') &&
+                                                        p['approval_status']
+                                                                ?.toString() !=
+                                                            'approved') ...[
+                                                      const SizedBox(width: 8),
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets.symmetric(
+                                                          horizontal: 7,
+                                                          vertical: 3,
+                                                        ),
+                                                        decoration: BoxDecoration(
+                                                          color: const Color(
+                                                            0xFFFF8A00,
+                                                          ).withValues(alpha: 0.12),
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                            999,
+                                                          ),
+                                                        ),
+                                                        child: const Text(
+                                                          'Freigabe offen',
+                                                          style: TextStyle(
+                                                            color: Color(
+                                                              0xFFFF8A00,
+                                                            ),
+                                                            fontSize: 10,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                    const SizedBox(width: 8),"""
+          text = replace_once(text, old_role, new_role, "approval badge")
+
+          old_trailing = """                                  const Icon(
+                                            Icons.chevron_right,
+                                            color: Color(0xFF98A2B3),
+                                          ),"""
+          new_trailing = """                                  if (_isTrainer &&
+                                            (role == 'eltern' ||
+                                                role == 'jugendmitglied'))
+                                          Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (p['approval_status']
+                                                      ?.toString() !=
+                                                  'approved')
+                                                IconButton(
+                                                  tooltip: 'Konto freigeben',
+                                                  onPressed: () =>
+                                                      _approveProfile(p),
+                                                  icon: const Icon(
+                                                    Icons.verified_user_outlined,
+                                                    color: Color(0xFF13A05B),
+                                                  ),
+                                                ),
+                                              IconButton(
+                                                tooltip: 'Mitglied entfernen',
+                                                onPressed: () =>
+                                                    _deleteProfile(p),
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                  color: Color(0xFFE30613),
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        else
+                                          const Icon(
+                                            Icons.chevron_right,
+                                            color: Color(0xFF98A2B3),
+                                          ),"""
+          text = replace_once(text, old_trailing, new_trailing, "member actions")
+
+          members.write_text(text, encoding="utf-8")
+
+          # Version bump
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          current = "version: 1.0.3+5"
+          target = "version: 1.0.4+6"
+          if current not in p:
+              raise SystemExit("Expected version 1.0.3+5 not found")
+          pubspec.write_text(p.replace(current, target, 1), encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/main.dart lib/screens/auth_screen.dart lib/screens/members_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/main.dart lib/screens/auth_screen.dart lib/screens/members_screen.dart
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/main.dart lib/screens/auth_screen.dart lib/screens/members_screen.dart pubspec.yaml
+          git commit -m "Add member approval and removal"
+          git push origin main
