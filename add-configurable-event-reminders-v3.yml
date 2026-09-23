@@ -1,0 +1,130 @@
+name: Add Configurable Event Reminders V3
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch reminder settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+
+          controls = base64.b64decode("ICAgICAgICAgICAgICAgICAgICAgIGNvbnN0IERpdmlkZXIoaGVpZ2h0OiAyOCksCiAgICAgICAgICAgICAgICAgICAgICBTd2l0Y2hMaXN0VGlsZSgKICAgICAgICAgICAgICAgICAgICAgICAgY29udGVudFBhZGRpbmc6IEVkZ2VJbnNldHMuemVybywKICAgICAgICAgICAgICAgICAgICAgICAgdGl0bGU6IGNvbnN0IFRleHQoCiAgICAgICAgICAgICAgICAgICAgICAgICAgJ0F1dG9tYXRpc2NoZSBUZXJtaW5lcmlubmVydW5nJywKICAgICAgICAgICAgICAgICAgICAgICAgICBzdHlsZTogVGV4dFN0eWxlKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IF9uYXZ5LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgZm9udFdlaWdodDogRm9udFdlaWdodC53NzAwLAogICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgIHN1YnRpdGxlOiBjb25zdCBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAgICdHaWx0IGbDvHIgVGVybWluZSB1bmQgQXVzYmlsZHVuZ3N0ZXJtaW5lIG1pdCBTdGFydHplaXQuJywKICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgdmFsdWU6IF9ldmVudFJlbWluZGVyc0VuYWJsZWQsCiAgICAgICAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlZDogX25vdGlmaWNhdGlvbnNFbmFibGVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA/ICh2YWx1ZSkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHNldFN0YXRlKCgpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIF9ldmVudFJlbWluZGVyc0VuYWJsZWQgPSB2YWx1ZTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICAgICAgOiBudWxsLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgIGlmIChfZXZlbnRSZW1pbmRlcnNFbmFibGVkKSAuLi5bCiAgICAgICAgICAgICAgICAgICAgICAgIGNvbnN0IFNpemVkQm94KGhlaWdodDogOCksCiAgICAgICAgICAgICAgICAgICAgICAgIERyb3Bkb3duQnV0dG9uRm9ybUZpZWxkPGludD4oCiAgICAgICAgICAgICAgICAgICAgICAgICAgaW5pdGlhbFZhbHVlOiBfcmVtaW5kZXJNaW51dGVzLAogICAgICAgICAgICAgICAgICAgICAgICAgIGRlY29yYXRpb246IGNvbnN0IElucHV0RGVjb3JhdGlvbigKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGxhYmVsVGV4dDogJ0VyaW5uZXJ1bmcgdm9yIGRlbSBUZXJtaW4nLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgcHJlZml4SWNvbjogSWNvbihJY29ucy5zY2hlZHVsZV9vdXRsaW5lZCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBib3JkZXI6IE91dGxpbmVJbnB1dEJvcmRlcigpLAogICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICAgaXRlbXM6IGNvbnN0IFsKICAgICAgICAgICAgICAgICAgICAgICAgICAgIERyb3Bkb3duTWVudUl0ZW0oCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHZhbHVlOiAxNSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY2hpbGQ6IFRleHQoJzE1IE1pbnV0ZW4gdm9yaGVyJyksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgRHJvcGRvd25NZW51SXRlbSgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgdmFsdWU6IDMwLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjaGlsZDogVGV4dCgnMzAgTWludXRlbiB2b3JoZXInKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBEcm9wZG93bk1lbnVJdGVtKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICB2YWx1ZTogNjAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KCcxIFN0dW5kZSB2b3JoZXInKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBEcm9wZG93bk1lbnVJdGVtKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICB2YWx1ZTogMTIwLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjaGlsZDogVGV4dCgnMiBTdHVuZGVuIHZvcmhlcicpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgIERyb3Bkb3duTWVudUl0ZW0oCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHZhbHVlOiAxODAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KCczIFN0dW5kZW4gdm9yaGVyJyksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgRHJvcGRvd25NZW51SXRlbSgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgdmFsdWU6IDE0NDAsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KCcxIFRhZyB2b3JoZXInKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgICAgICAgICBvbkNoYW5nZWQ6IF9ub3RpZmljYXRpb25zRW5hYmxlZAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICA/ICh2YWx1ZSkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaWYgKHZhbHVlICE9IG51bGwpIHsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2V0U3RhdGUoKCkgewogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIF9yZW1pbmRlck1pbnV0ZXMgPSB2YWx1ZTsKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfSk7CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICA6IG51bGwsCiAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICBdLAo=").decode()
+
+          path = Path("lib/screens/home_shell.dart")
+          full = path.read_text(encoding="utf-8")
+
+          start = full.find("class _MyProfileScreenState")
+          end = full.find("class _InfoScreen", start)
+          if start == -1 or end == -1:
+              raise SystemExit("MyProfile section not found")
+
+          text = full[start:end]
+
+          if "bool _eventRemindersEnabled = true;" not in text:
+              anchor = "  bool _notificationsEnabled = true;"
+              if anchor not in text:
+                  raise SystemExit("notifications state field not found")
+              text = text.replace(
+                  anchor,
+                  anchor + "\n  bool _eventRemindersEnabled = true;\n  int _reminderMinutes = 30;",
+                  1,
+              )
+
+          old_select = "'first_name,last_name,phone,role,notifications_enabled'"
+          new_select = "'first_name,last_name,phone,role,notifications_enabled,event_reminders_enabled,reminder_minutes'"
+          if new_select not in text:
+              if old_select not in text:
+                  raise SystemExit("profile select fields not found")
+              text = text.replace(old_select, new_select, 1)
+
+          load_anchor = "      _notificationsEnabled = profile?['notifications_enabled'] != false;"
+          if "profile?['event_reminders_enabled']" not in text:
+              if load_anchor not in text:
+                  raise SystemExit("notifications load line not found")
+              text = text.replace(
+                  load_anchor,
+                  load_anchor
+                  + "\n      _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;"
+                  + "\n      _reminderMinutes = (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;",
+                  1,
+              )
+
+          save_anchor = "        'notifications_enabled': _notificationsEnabled,"
+          if "'event_reminders_enabled': _eventRemindersEnabled," not in text:
+              if save_anchor not in text:
+                  raise SystemExit("notifications save field not found")
+              text = text.replace(
+                  save_anchor,
+                  save_anchor
+                  + "\n        'event_reminders_enabled': _eventRemindersEnabled,"
+                  + "\n        'reminder_minutes': _reminderMinutes,",
+                  1,
+              )
+
+          if "Automatische Terminerinnerung" not in text:
+              needle = "'Termine, Nachrichten, Dokumente und Ausbildung'"
+              pos = text.find(needle)
+              if pos == -1:
+                  raise SystemExit("notification description text not found")
+
+              close_marker = "                    ],\n                  ),\n                ),\n                if (kIsWeb)"
+              insert_pos = text.find(close_marker, pos)
+              if insert_pos == -1:
+                  raise SystemExit("notification card closing marker not found")
+
+              text = text[:insert_pos] + controls + text[insert_pos:]
+
+          full = full[:start] + text + full[end:]
+          path.write_text(full, encoding="utf-8")
+
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          if "version: 1.0.4+6" in p:
+              p = p.replace("version: 1.0.4+6", "version: 1.0.5+7", 1)
+          elif "version: 1.0.5+7" not in p:
+              raise SystemExit("Expected app version not found")
+          pubspec.write_text(p, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/home_shell.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/home_shell.dart
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/home_shell.dart pubspec.yaml
+          git commit -m "Add configurable event reminders"
+          git push origin main
