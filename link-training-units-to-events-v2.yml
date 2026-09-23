@@ -1,0 +1,207 @@
+name: Link Training Units To Events V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Add linked training event reminders
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import re
+
+          reminder_helpers = base64.b64decode("ICBGdXR1cmU8dm9pZD4gX2xvYWRSZW1pbmRlclNldHRpbmdzKCkgYXN5bmMgewogICAgZmluYWwgdXNlciA9IF9zdXBhYmFzZS5hdXRoLmN1cnJlbnRVc2VyOwogICAgaWYgKHVzZXIgPT0gbnVsbCkgcmV0dXJuOwoKICAgIHRyeSB7CiAgICAgIGZpbmFsIHByb2ZpbGUgPSBhd2FpdCBfc3VwYWJhc2UKICAgICAgICAgIC5mcm9tKCdwcm9maWxlcycpCiAgICAgICAgICAuc2VsZWN0KCdldmVudF9yZW1pbmRlcnNfZW5hYmxlZCxyZW1pbmRlcl9taW51dGVzJykKICAgICAgICAgIC5lcSgnaWQnLCB1c2VyLmlkKQogICAgICAgICAgLm1heWJlU2luZ2xlKCk7CgogICAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKCiAgICAgIHNldFN0YXRlKCgpIHsKICAgICAgICBfZXZlbnRSZW1pbmRlcnNFbmFibGVkID0KICAgICAgICAgICAgcHJvZmlsZT9bJ2V2ZW50X3JlbWluZGVyc19lbmFibGVkJ10gIT0gZmFsc2U7CiAgICAgICAgX3JlbWluZGVyTWludXRlcyA9CiAgICAgICAgICAgIChwcm9maWxlP1sncmVtaW5kZXJfbWludXRlcyddIGFzIG51bT8pPy50b0ludCgpID8/IDMwOwogICAgICB9KTsKICAgIH0gY2F0Y2ggKF8pIHsKICAgICAgLy8gU3RhbmRhcmR3ZXJ0ZSBiZWliZWhhbHRlbi4KICAgIH0KICB9CgogIFN0cmluZyBfcmVtaW5kZXJMYWJlbCgpIHsKICAgIGlmICghX2V2ZW50UmVtaW5kZXJzRW5hYmxlZCkgcmV0dXJuICdBdXNnZXNjaGFsdGV0JzsKCiAgICBzd2l0Y2ggKF9yZW1pbmRlck1pbnV0ZXMpIHsKICAgICAgY2FzZSAxNToKICAgICAgICByZXR1cm4gJzE1IE1pbi4gdm9yaGVyJzsKICAgICAgY2FzZSAzMDoKICAgICAgICByZXR1cm4gJzMwIE1pbi4gdm9yaGVyJzsKICAgICAgY2FzZSA2MDoKICAgICAgICByZXR1cm4gJzEgU3RkLiB2b3JoZXInOwogICAgICBjYXNlIDEyMDoKICAgICAgICByZXR1cm4gJzIgU3RkLiB2b3JoZXInOwogICAgICBjYXNlIDE4MDoKICAgICAgICByZXR1cm4gJzMgU3RkLiB2b3JoZXInOwogICAgICBjYXNlIDE0NDA6CiAgICAgICAgcmV0dXJuICcxIFRhZyB2b3JoZXInOwogICAgICBkZWZhdWx0OgogICAgICAgIGlmIChfcmVtaW5kZXJNaW51dGVzICUgNjAgPT0gMCkgewogICAgICAgICAgcmV0dXJuICcke19yZW1pbmRlck1pbnV0ZXMgfi8gNjB9IFN0ZC4gdm9yaGVyJzsKICAgICAgICB9CiAgICAgICAgcmV0dXJuICckX3JlbWluZGVyTWludXRlcyBNaW4uIHZvcmhlcic7CiAgICB9CiAgfQoKICBNYXA8U3RyaW5nLCBkeW5hbWljPj8gX2xpbmtlZEV2ZW50KE1hcDxTdHJpbmcsIGR5bmFtaWM+IHVuaXQpIHsKICAgIGZpbmFsIHJhdyA9IHVuaXRbJ2V2ZW50cyddOwogICAgaWYgKHJhdyBpcyBNYXA8U3RyaW5nLCBkeW5hbWljPikgcmV0dXJuIHJhdzsKICAgIGlmIChyYXcgaXMgTWFwKSByZXR1cm4gTWFwPFN0cmluZywgZHluYW1pYz4uZnJvbShyYXcpOwogICAgcmV0dXJuIG51bGw7CiAgfQoKICBTdHJpbmcgX2xpbmtlZEV2ZW50U3VtbWFyeShNYXA8U3RyaW5nLCBkeW5hbWljPiBldmVudCkgewogICAgZmluYWwgdGl0bGUgPSBldmVudFsndGl0bGUnXT8udG9TdHJpbmcoKS50cmltKCkgPz8gJyc7CiAgICBmaW5hbCBwYXJzZWQgPSBEYXRlVGltZS50cnlQYXJzZShldmVudFsnc3RhcnRzX2F0J10/LnRvU3RyaW5nKCkgPz8gJycpOwogICAgZmluYWwgbG9jYWwgPSBwYXJzZWQ/LnRvTG9jYWwoKTsKCiAgICBTdHJpbmcgZGF0ZVRpbWUgPSAnJzsKICAgIGlmIChsb2NhbCAhPSBudWxsKSB7CiAgICAgIFN0cmluZyB0d28oaW50IHZhbHVlKSA9PiB2YWx1ZS50b1N0cmluZygpLnBhZExlZnQoMiwgJzAnKTsKICAgICAgZGF0ZVRpbWUgPQogICAgICAgICAgJyR7dHdvKGxvY2FsLmRheSl9LiR7dHdvKGxvY2FsLm1vbnRoKX0uJHtsb2NhbC55ZWFyfSDCtyAnCiAgICAgICAgICAnJHt0d28obG9jYWwuaG91cil9OiR7dHdvKGxvY2FsLm1pbnV0ZSl9IFVocic7CiAgICB9CgogICAgaWYgKHRpdGxlLmlzRW1wdHkpIHJldHVybiBkYXRlVGltZTsKICAgIGlmIChkYXRlVGltZS5pc0VtcHR5KSByZXR1cm4gdGl0bGU7CiAgICByZXR1cm4gJyR0aXRsZSDCtyAkZGF0ZVRpbWUnOwogIH0KCg==").decode()
+          details_link_block = base64.b64decode("ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaWYgKF9saW5rZWRFdmVudCh1bml0KSAhPSBudWxsKSAuLi5bCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgX2RldGFpbCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICdUZXJtaW4nLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgX2xpbmtlZEV2ZW50U3VtbWFyeShfbGlua2VkRXZlbnQodW5pdCkhKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEljb25zLmV2ZW50X291dGxpbmVkLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgX2RldGFpbCgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICdFcmlubmVydW5nJywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIF9yZW1pbmRlckxhYmVsKCksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBfZXZlbnRSZW1pbmRlcnNFbmFibGVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPyBJY29ucy5ub3RpZmljYXRpb25zX2FjdGl2ZV9vdXRsaW5lZAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDogSWNvbnMubm90aWZpY2F0aW9uc19vZmZfb3V0bGluZWQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgXSwK").decode()
+          editor_helpers = base64.b64decode("ICBGdXR1cmU8dm9pZD4gX2xvYWRBdmFpbGFibGVFdmVudHMoKSBhc3luYyB7CiAgICB0cnkgewogICAgICBmaW5hbCByb3dzID0gYXdhaXQgX3N1cGFiYXNlCiAgICAgICAgICAuZnJvbSgnZXZlbnRzJykKICAgICAgICAgIC5zZWxlY3QoJ2lkLHRpdGxlLHN0YXJ0c19hdCxsb2NhdGlvbicpCiAgICAgICAgICAub3JkZXIoJ3N0YXJ0c19hdCcsIGFzY2VuZGluZzogdHJ1ZSk7CgogICAgICBpZiAoIW1vdW50ZWQpIHJldHVybjsKCiAgICAgIHNldFN0YXRlKCgpIHsKICAgICAgICBfYXZhaWxhYmxlRXZlbnRzID0gTGlzdDxNYXA8U3RyaW5nLCBkeW5hbWljPj4uZnJvbShyb3dzKTsKICAgICAgICBfbG9hZGluZ0V2ZW50cyA9IGZhbHNlOwogICAgICB9KTsKICAgIH0gY2F0Y2ggKF8pIHsKICAgICAgaWYgKCFtb3VudGVkKSByZXR1cm47CiAgICAgIHNldFN0YXRlKCgpID0+IF9sb2FkaW5nRXZlbnRzID0gZmFsc2UpOwogICAgfQogIH0KCiAgU3RyaW5nIF9ldmVudE9wdGlvbkxhYmVsKE1hcDxTdHJpbmcsIGR5bmFtaWM+IGV2ZW50KSB7CiAgICBmaW5hbCB0aXRsZSA9IGV2ZW50Wyd0aXRsZSddPy50b1N0cmluZygpLnRyaW0oKSA/PyAnVGVybWluJzsKICAgIGZpbmFsIHBhcnNlZCA9IERhdGVUaW1lLnRyeVBhcnNlKGV2ZW50WydzdGFydHNfYXQnXT8udG9TdHJpbmcoKSA/PyAnJyk7CiAgICBmaW5hbCBsb2NhbCA9IHBhcnNlZD8udG9Mb2NhbCgpOwoKICAgIGlmIChsb2NhbCA9PSBudWxsKSByZXR1cm4gdGl0bGU7CgogICAgU3RyaW5nIHR3byhpbnQgdmFsdWUpID0+IHZhbHVlLnRvU3RyaW5nKCkucGFkTGVmdCgyLCAnMCcpOwogICAgcmV0dXJuICckdGl0bGUgwrcgJHt0d28obG9jYWwuZGF5KX0uJHt0d28obG9jYWwubW9udGgpfS4ke2xvY2FsLnllYXJ9ICcKICAgICAgICAnJHt0d28obG9jYWwuaG91cil9OiR7dHdvKGxvY2FsLm1pbnV0ZSl9IFVocic7CiAgfQoK").decode()
+          dropdown_block = base64.b64decode("ICAgICAgICAgICAgICBpZiAoX2xvYWRpbmdFdmVudHMpCiAgICAgICAgICAgICAgICBjb25zdCBMaW5lYXJQcm9ncmVzc0luZGljYXRvcigpCiAgICAgICAgICAgICAgZWxzZQogICAgICAgICAgICAgICAgRHJvcGRvd25CdXR0b25Gb3JtRmllbGQ8U3RyaW5nPz4oCiAgICAgICAgICAgICAgICAgIGluaXRpYWxWYWx1ZTogX3NlbGVjdGVkRXZlbnRJZCwKICAgICAgICAgICAgICAgICAgZGVjb3JhdGlvbjogY29uc3QgSW5wdXREZWNvcmF0aW9uKAogICAgICAgICAgICAgICAgICAgIGxhYmVsVGV4dDogJ01pdCBUZXJtaW4gdmVya27DvHBmZW4nLAogICAgICAgICAgICAgICAgICAgIHByZWZpeEljb246IEljb24oSWNvbnMuZXZlbnRfb3V0bGluZWQpLAogICAgICAgICAgICAgICAgICAgIGJvcmRlcjogT3V0bGluZUlucHV0Qm9yZGVyKCksCiAgICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgICAgIGl0ZW1zOiBbCiAgICAgICAgICAgICAgICAgICAgY29uc3QgRHJvcGRvd25NZW51SXRlbTxTdHJpbmc/PigKICAgICAgICAgICAgICAgICAgICAgIHZhbHVlOiBudWxsLAogICAgICAgICAgICAgICAgICAgICAgY2hpbGQ6IFRleHQoJ0tlaW4gVGVybWluIHZlcmtuw7xwZnQnKSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgIC4uLl9hdmFpbGFibGVFdmVudHMubWFwKAogICAgICAgICAgICAgICAgICAgICAgKGV2ZW50KSA9PiBEcm9wZG93bk1lbnVJdGVtPFN0cmluZz8+KAogICAgICAgICAgICAgICAgICAgICAgICB2YWx1ZTogZXZlbnRbJ2lkJ10/LnRvU3RyaW5nKCksCiAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAgIF9ldmVudE9wdGlvbkxhYmVsKGV2ZW50KSwKICAgICAgICAgICAgICAgICAgICAgICAgICBvdmVyZmxvdzogVGV4dE92ZXJmbG93LmVsbGlwc2lzLAogICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICBdLAogICAgICAgICAgICAgICAgICBvbkNoYW5nZWQ6ICh2YWx1ZSkgewogICAgICAgICAgICAgICAgICAgIHNldFN0YXRlKCgpIHsKICAgICAgICAgICAgICAgICAgICAgIF9zZWxlY3RlZEV2ZW50SWQgPSB2YWx1ZTsKICAgICAgICAgICAgICAgICAgICB9KTsKICAgICAgICAgICAgICAgICAgfSwKICAgICAgICAgICAgICAgICksCiAgICAgICAgICAgICAgY29uc3QgU2l6ZWRCb3goaGVpZ2h0OiAxMiksCg==").decode()
+
+          path = Path("lib/screens/training_plans_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          details_start = text.find("class _TrainingPlanDetailsScreenState")
+          plan_editor_start = text.find("class _TrainingPlanEditorState", details_start)
+          unit_editor_start = text.find("class _TrainingUnitEditorState", details_start)
+          if details_start == -1 or plan_editor_start == -1 or unit_editor_start == -1:
+              raise SystemExit("training screen sections not found")
+
+          # Details state fields
+          details = text[details_start:plan_editor_start]
+          if "bool _eventRemindersEnabled = true;" not in details:
+              m = re.search(r"(?m)^  String _unitSearch = '';\\s*$", details)
+              if not m:
+                  raise SystemExit("unit search state field not found")
+              insert = "\n  bool _eventRemindersEnabled = true;\n  int _reminderMinutes = 30;"
+              pos = details_start + m.end()
+              text = text[:pos] + insert + text[pos:]
+
+          # Details initState
+          plan_editor_start = text.find("class _TrainingPlanEditorState", details_start)
+          details = text[details_start:plan_editor_start]
+          if "_loadReminderSettings();" not in details:
+              pattern = r"(void initState\(\) \{\s*super\.initState\(\);\s*)(_loadUnits\(\);)"
+              new_details, n = re.subn(
+                  pattern,
+                  r"\1_loadReminderSettings();\n    \2",
+                  details,
+                  count=1,
+              )
+              if n != 1:
+                  raise SystemExit("details initState not found")
+              text = text[:details_start] + new_details + text[plan_editor_start:]
+
+          # Join event data when loading units
+          plan_editor_start = text.find("class _TrainingPlanEditorState", details_start)
+          details = text[details_start:plan_editor_start]
+          if "events(id,title,starts_at,ends_at,location)" not in details:
+              old = ".from('training_units')\n          .select()"
+              new = ".from('training_units')\n          .select('*, events(id,title,starts_at,ends_at,location)')"
+              if old not in details:
+                  raise SystemExit("training units select not found")
+              details = details.replace(old, new, 1)
+              text = text[:details_start] + details + text[plan_editor_start:]
+
+          # Helper methods
+          plan_editor_start = text.find("class _TrainingPlanEditorState", details_start)
+          details = text[details_start:plan_editor_start]
+          if "Future<void> _loadReminderSettings()" not in details:
+              pos_rel = details.find("  Future<void> _loadUnits()")
+              if pos_rel == -1:
+                  raise SystemExit("loadUnits method not found")
+              pos = details_start + pos_rel
+              text = text[:pos] + reminder_helpers + text[pos:]
+
+          # Insert linked event + reminder at the beginning of ExpansionTile children.
+          plan_editor_start = text.find("class _TrainingPlanEditorState", details_start)
+          details = text[details_start:plan_editor_start]
+          if "'Erinnerung'," not in details:
+              map_pos = details.find("..._filteredUnits.map((unit)")
+              if map_pos == -1:
+                  raise SystemExit("filtered units map not found")
+              children_pos = details.find("                            children: [", map_pos)
+              if children_pos == -1:
+                  raise SystemExit("unit ExpansionTile children list not found")
+              line_end = details.find("\n", children_pos)
+              if line_end == -1:
+                  raise SystemExit("unit children line ending not found")
+              insert_rel = line_end + 1
+              details = details[:insert_rel] + details_link_block + details[insert_rel:]
+              text = text[:details_start] + details + text[plan_editor_start:]
+
+          # Re-find unit editor because text shifted.
+          unit_editor_start = text.find("class _TrainingUnitEditorState")
+          if unit_editor_start == -1:
+              raise SystemExit("unit editor state not found")
+          editor = text[unit_editor_start:]
+
+          # Editor state fields
+          if "List<Map<String, dynamic>> _availableEvents" not in editor:
+              m = re.search(r"(?m)^  bool _saving = false;\\s*$", editor)
+              if not m:
+                  raise SystemExit("editor saving field not found")
+              insert = (
+                  "\n  bool _loadingEvents = true;"
+                  "\n  List<Map<String, dynamic>> _availableEvents = [];"
+                  "\n  String? _selectedEventId;"
+              )
+              pos = unit_editor_start + m.end()
+              text = text[:pos] + insert + text[pos:]
+
+          # Editor initState: selected link + load events
+          unit_editor_start = text.find("class _TrainingUnitEditorState")
+          editor = text[unit_editor_start:]
+          if "_loadAvailableEvents();" not in editor:
+              marker = "(widget.suggestedOrder ?? 0).toString(),\n    );"
+              pos_rel = editor.find(marker)
+              if pos_rel == -1:
+                  raise SystemExit("editor sort order init not found")
+              pos = unit_editor_start + pos_rel + len(marker)
+              insert = (
+                  "\n    _selectedEventId = widget.unit?['event_id']?.toString();"
+                  "\n    _loadAvailableEvents();"
+              )
+              text = text[:pos] + insert + text[pos:]
+
+          # Editor helper methods
+          unit_editor_start = text.find("class _TrainingUnitEditorState")
+          editor = text[unit_editor_start:]
+          if "Future<void> _loadAvailableEvents()" not in editor:
+              pos_rel = editor.find("  Future<void> _save()")
+              if pos_rel == -1:
+                  raise SystemExit("unit editor save method not found")
+              pos = unit_editor_start + pos_rel
+              text = text[:pos] + editor_helpers + text[pos:]
+
+          # Save event_id with the unit
+          unit_editor_start = text.find("class _TrainingUnitEditorState")
+          editor = text[unit_editor_start:]
+          if "'event_id': _selectedEventId," not in editor:
+              marker = "      'training_plan_id': widget.trainingPlanId,"
+              pos_rel = editor.find(marker)
+              if pos_rel == -1:
+                  raise SystemExit("training_plan_id save field not found")
+              pos = unit_editor_start + pos_rel + len(marker)
+              text = text[:pos] + "\n      'event_id': _selectedEventId," + text[pos:]
+
+          # Dropdown between topic and objectives
+          unit_editor_start = text.find("class _TrainingUnitEditorState")
+          editor = text[unit_editor_start:]
+          if "labelText: 'Mit Termin verknüpfen'" not in editor:
+              objective_pos = editor.find("              TextFormField(\n                controller: _objectives,")
+              if objective_pos == -1:
+                  raise SystemExit("objectives field not found")
+              pos = unit_editor_start + objective_pos
+              text = text[:pos] + dropdown_block + text[pos:]
+
+          path.write_text(text, encoding="utf-8")
+
+          # Version bump
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          if "version: 1.0.6+8" in p:
+              p = p.replace("version: 1.0.6+8", "version: 1.0.7+9", 1)
+          elif "version: 1.0.7+9" not in p:
+              raise SystemExit("Expected version 1.0.6+8 not found")
+          pubspec.write_text(p, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/training_plans_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/training_plans_screen.dart
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/training_plans_screen.dart pubspec.yaml
+          git commit -m "Link training units to events and show reminders"
+          git push origin main
