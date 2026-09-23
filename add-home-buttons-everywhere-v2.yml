@@ -1,0 +1,290 @@
+name: Add Home Buttons Everywhere V2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Add direct home navigation buttons
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          import re
+
+          Path("lib/services/home_navigation.dart").write_text(
+              base64.b64decode("aW1wb3J0ICdwYWNrYWdlOmZsdXR0ZXIvbWF0ZXJpYWwuZGFydCc7CgpjbGFzcyBIb21lTmF2aWdhdGlvbiB7CiAgSG9tZU5hdmlnYXRpb24uXygpOwoKICBzdGF0aWMgVm9pZENhbGxiYWNrPyBfZ29Ib21lSGFuZGxlcjsKCiAgc3RhdGljIHZvaWQgcmVnaXN0ZXIoVm9pZENhbGxiYWNrIGhhbmRsZXIpIHsKICAgIF9nb0hvbWVIYW5kbGVyID0gaGFuZGxlcjsKICB9CgogIHN0YXRpYyB2b2lkIHVucmVnaXN0ZXIoKSB7CiAgICBfZ29Ib21lSGFuZGxlciA9IG51bGw7CiAgfQoKICBzdGF0aWMgdm9pZCBnb0hvbWUoQnVpbGRDb250ZXh0IGNvbnRleHQpIHsKICAgIF9nb0hvbWVIYW5kbGVyPy5jYWxsKCk7CiAgICBOYXZpZ2F0b3Iub2YoY29udGV4dCkucG9wVW50aWwoKHJvdXRlKSA9PiByb3V0ZS5pc0ZpcnN0KTsKICB9Cn0K").decode(),
+              encoding="utf-8",
+          )
+
+          def read(path):
+              return Path(path).read_text(encoding="utf-8")
+
+          def write(path, text):
+              Path(path).write_text(text, encoding="utf-8")
+
+          def add_import(text, import_line):
+              if import_line in text:
+                  return text
+              material = "import 'package:flutter/material.dart';"
+              if material not in text:
+                  raise SystemExit(f"Material import not found: {import_line}")
+              return text.replace(
+                  material,
+                  material + "\n\n" + import_line,
+                  1,
+              )
+
+          home_import = "import '../services/home_navigation.dart';"
+
+          # HomeShell controls the selected bottom-navigation tab.
+          path = "lib/screens/home_shell.dart"
+          text = add_import(read(path), home_import)
+
+          if "HomeNavigation.register(_goHomeFromAnywhere);" not in text:
+              anchor = "  void initState() {\n    super.initState();"
+              replacement = (
+                  "  void initState() {\n"
+                  "    super.initState();\n"
+                  "    HomeNavigation.register(_goHomeFromAnywhere);"
+              )
+              if anchor not in text:
+                  raise SystemExit("HomeShell initState anchor not found")
+              text = text.replace(anchor, replacement, 1)
+
+          if "HomeNavigation.unregister();" not in text:
+              anchor = "  void dispose() {\n    _pushOpenSubscription?.cancel();"
+              replacement = (
+                  "  void dispose() {\n"
+                  "    HomeNavigation.unregister();\n"
+                  "    _pushOpenSubscription?.cancel();"
+              )
+              if anchor not in text:
+                  raise SystemExit("HomeShell dispose anchor not found")
+              text = text.replace(anchor, replacement, 1)
+
+          if "void _goHomeFromAnywhere()" not in text:
+              anchor = "  void _openTab(int index) {"
+              pos = text.find(anchor)
+              if pos == -1:
+                  raise SystemExit("HomeShell openTab anchor not found")
+              method = (
+                  "  void _goHomeFromAnywhere() {\n"
+                  "    if (!mounted) return;\n"
+                  "    setState(() => _selectedIndex = 0);\n"
+                  "    _refreshBadges();\n"
+                  "  }\n\n"
+              )
+              text = text[:pos] + method + text[pos:]
+
+          write(path, text)
+
+          def add_custom_header_home(path, title, foreground_expr):
+              text = add_import(read(path), home_import)
+
+              # Find the actual Text('TITLE') widget, not other string uses.
+              matches = list(
+                  re.finditer(
+                      rf"Text\(\s*'{re.escape(title)}'\s*,",
+                      text,
+                  )
+              )
+              if not matches:
+                  raise SystemExit(
+                      f"Header title Text widget not found in {path}: {title}"
+                  )
+
+              chosen = None
+              for match in matches:
+                  idx = match.start()
+                  search_start = max(0, idx - 4500)
+                  row_pos = text.rfind("child: Row(", search_start, idx)
+                  safe_pos = text.rfind("child: SafeArea(", search_start, idx)
+                  if row_pos != -1 and safe_pos != -1 and safe_pos < row_pos:
+                      children_pos = text.find("children: [", row_pos, idx)
+                      if children_pos != -1:
+                          chosen = (row_pos, children_pos, idx)
+                          break
+
+              if chosen is None:
+                  raise SystemExit(f"Header row not found in {path}: {title}")
+
+              _, children_pos, title_pos = chosen
+              nearby = text[children_pos:title_pos]
+
+              if "Zur Startseite" not in nearby:
+                  line_end = text.find("\n", children_pos)
+                  if line_end == -1:
+                      raise SystemExit(
+                          f"Header children line end not found in {path}: {title}"
+                      )
+
+                  indent_start = text.rfind("\n", 0, children_pos) + 1
+                  base_indent = text[indent_start:children_pos]
+                  item_indent = base_indent + "  "
+
+                  button = (
+                      f"{item_indent}IconButton(\n"
+                      f"{item_indent}  tooltip: 'Zur Startseite',\n"
+                      f"{item_indent}  onPressed: () => HomeNavigation.goHome(context),\n"
+                      f"{item_indent}  style: IconButton.styleFrom(\n"
+                      f"{item_indent}    backgroundColor: Colors.white,\n"
+                      f"{item_indent}    foregroundColor: {foreground_expr},\n"
+                      f"{item_indent}  ),\n"
+                      f"{item_indent}  icon: const Icon(Icons.home_outlined),\n"
+                      f"{item_indent}),\n"
+                      f"{item_indent}const SizedBox(width: 8),\n"
+                  )
+
+                  insert_at = line_end + 1
+                  text = text[:insert_at] + button + text[insert_at:]
+
+              write(path, text)
+
+          add_custom_header_home(
+              "lib/screens/events_screen.dart",
+              "Termine",
+              "navy",
+          )
+          add_custom_header_home(
+              "lib/screens/messages_screen.dart",
+              "Nachrichten",
+              "navy",
+          )
+          add_custom_header_home(
+              "lib/screens/documents_screen.dart",
+              "Dokumente",
+              "navy",
+          )
+          add_custom_header_home(
+              "lib/screens/training_plans_screen.dart",
+              "Ausbildung",
+              "navy",
+          )
+          add_custom_header_home(
+              "lib/screens/members_screen.dart",
+              "Mitglieder",
+              "navy",
+          )
+          add_custom_header_home(
+              "lib/screens/alarm_screen.dart",
+              "Jugendfeuerwehr-Alarm",
+              "_red",
+          )
+          add_custom_header_home(
+              "lib/screens/home_shell.dart",
+              "Mehr",
+              "_navy",
+          )
+
+          def add_appbar_home_actions(path):
+              text = add_import(read(path), home_import)
+
+              # Handle one-line Alarm AppBar first.
+              one_line = "appBar: AppBar(title: const Text('Alarm')),"
+              if one_line in text:
+                  replacement = (
+                      "appBar: AppBar(\n"
+                      "          title: const Text('Alarm'),\n"
+                      "          actions: [\n"
+                      "            IconButton(\n"
+                      "              tooltip: 'Zur Startseite',\n"
+                      "              onPressed: () => HomeNavigation.goHome(context),\n"
+                      "              icon: const Icon(Icons.home_outlined),\n"
+                      "            ),\n"
+                      "          ],\n"
+                      "        ),"
+                  )
+                  text = text.replace(one_line, replacement, 1)
+
+              needle = "appBar: AppBar(\n"
+              start = 0
+
+              while True:
+                  pos = text.find(needle, start)
+                  if pos == -1:
+                      break
+
+                  nearby = text[pos:pos + 900]
+                  if "tooltip: 'Zur Startseite'" in nearby:
+                      start = pos + len(needle)
+                      continue
+
+                  insertion = (
+                      "        actions: [\n"
+                      "          IconButton(\n"
+                      "            tooltip: 'Zur Startseite',\n"
+                      "            onPressed: () => HomeNavigation.goHome(context),\n"
+                      "            icon: const Icon(Icons.home_outlined),\n"
+                      "          ),\n"
+                      "        ],\n"
+                  )
+
+                  insert_at = pos + len(needle)
+                  text = text[:insert_at] + insertion + text[insert_at:]
+                  start = insert_at + len(insertion)
+
+              write(path, text)
+
+          # Nested pages use an AppBar, so add a home button there as well.
+          for path in [
+              "lib/screens/messages_screen.dart",
+              "lib/screens/member_records_screen.dart",
+              "lib/screens/legal_screen.dart",
+              "lib/screens/home_shell.dart",
+              "lib/screens/alarm_screen.dart",
+          ]:
+              add_appbar_home_actions(path)
+
+          pubspec = Path("pubspec.yaml")
+          text = pubspec.read_text(encoding="utf-8")
+          if "version: 1.0.8+10" in text:
+              text = text.replace(
+                  "version: 1.0.8+10",
+                  "version: 1.0.9+11",
+                  1,
+              )
+          elif "version: 1.0.9+11" not in text:
+              raise SystemExit("Expected version 1.0.8+10 not found")
+          pubspec.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib
+
+      - name: Analyze
+        run: flutter analyze lib
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib pubspec.yaml
+          git commit -m "Add direct home buttons to app sections"
+          git push origin main
