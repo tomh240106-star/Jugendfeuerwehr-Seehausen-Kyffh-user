@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../services/home_navigation.dart';
+import '../services/duty_plan_import_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -295,14 +296,34 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
             ),
           );
 
-      await _supabase.from('documents').insert({
-        'title': meta.title,
-        'category': meta.category,
-        'file_name': pickedFile.name,
-        'storage_path': path,
-        'mime_type': _mimeTypeForFile(pickedFile.name),
-        'uploaded_by': user.id,
-      });
+      final insertedDocument = await _supabase
+          .from('documents')
+          .insert({
+            'title': meta.title,
+            'category': meta.category,
+            'file_name': pickedFile.name,
+            'storage_path': path,
+            'mime_type': _mimeTypeForFile(pickedFile.name),
+            'uploaded_by': user.id,
+          })
+          .select('id')
+          .single();
+
+      final documentId = insertedDocument['id']?.toString() ?? '';
+
+      String dutyPlanImportMessage = '';
+      final isDutyPlan = meta.category.trim().toLowerCase() == 'dienstplan' ||
+          meta.title.trim().toLowerCase().contains('dienstplan');
+
+      if (isDutyPlan && documentId.isNotEmpty) {
+        dutyPlanImportMessage = await _importDutyPlan(
+          filePath: pickedFile.path!,
+          fileName: pickedFile.name,
+          documentId: documentId,
+          documentTitle: meta.title,
+          userId: user.id,
+        );
+      }
 
       try {
         await _supabase.functions.invoke(
@@ -321,7 +342,13 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Dokument wurde hochgeladen.')),
+        SnackBar(
+          content: Text(
+            dutyPlanImportMessage.isEmpty
+                ? 'Dokument wurde hochgeladen.'
+                : dutyPlanImportMessage,
+          ),
+        ),
       );
 
       await _loadDocuments();
@@ -341,6 +368,84 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
       if (mounted) {
         setState(() => _uploading = false);
       }
+    }
+  }
+
+  Future<String> _importDutyPlan({
+    required String filePath,
+    required String fileName,
+    required String documentId,
+    required String documentTitle,
+    required String userId,
+  }) async {
+    final extension =
+        fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
+
+    const supportedExtensions = {
+      'jpg',
+      'jpeg',
+      'png',
+      'webp',
+    };
+
+    if (!supportedExtensions.contains(extension)) {
+      return 'Dienstplan hochgeladen. Für den automatischen Import bitte '
+          'JPG, PNG oder WebP verwenden.';
+    }
+
+    if (!DutyPlanImportService.isSupported) {
+      return 'Dienstplan hochgeladen. Der automatische Import ist aktuell '
+          'auf Android und iOS verfügbar.';
+    }
+
+    try {
+      final rows = await DutyPlanImportService.extractFromImage(filePath);
+
+      if (rows.isEmpty) {
+        return 'Dienstplan hochgeladen, aber es wurden keine verwertbaren '
+            'Ausbildungstermine erkannt.';
+      }
+
+      String isoDate(DateTime date) {
+        return '${date.year.toString().padLeft(4, '0')}-'
+            '${date.month.toString().padLeft(2, '0')}-'
+            '${date.day.toString().padLeft(2, '0')}';
+      }
+
+      final payload = rows.map((row) {
+        final date = isoDate(row.date);
+        final startShort = row.startTime.length >= 5
+            ? row.startTime.substring(0, 5)
+            : row.startTime;
+
+        return {
+          'title': row.topic,
+          'topic': row.topic,
+          'location': row.location.isEmpty ? null : row.location,
+          'description':
+              'Automatisch aus Dienstplan „$documentTitle“ übernommen.',
+          'training_date': date,
+          'start_time': row.startTime,
+          'end_time': row.endTime,
+          'valid_from': date,
+          'valid_until': date,
+          'created_by': userId,
+          'source_document_id': documentId,
+          'source_fingerprint': 'dienstplan|$date|$startShort',
+        };
+      }).toList();
+
+      await _supabase.from('training_plans').upsert(
+            payload,
+            onConflict: 'source_fingerprint',
+          );
+
+      return 'Dienstplan hochgeladen: ${rows.length} Ausbildungstermine '
+          'wurden automatisch erkannt und synchronisiert.';
+    } catch (e) {
+      debugPrint('Dienstplan-Import fehlgeschlagen: $e');
+      return 'Dienstplan wurde hochgeladen. Die automatische Übernahme '
+          'konnte diesmal nicht abgeschlossen werden.';
     }
   }
 
