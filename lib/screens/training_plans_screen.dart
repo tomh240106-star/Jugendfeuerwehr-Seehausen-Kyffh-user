@@ -13,6 +13,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
 
   bool _loading = true;
   bool _isTrainer = false;
+  bool _eventRemindersEnabled = true;
+  int _reminderMinutes = 30;
   String? _error;
   List<Map<String, dynamic>> _plans = [];
   String _searchQuery = '';
@@ -26,19 +28,21 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
 
   Future<void> _loadAll() async {
     await Future.wait([
-      _loadRole(),
+      _loadProfile(),
       _loadPlans(),
     ]);
   }
 
-  Future<void> _loadRole() async {
+  Future<void> _loadProfile() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
     try {
       final profile = await _supabase
           .from('profiles')
-          .select('role')
+          .select(
+            'role,event_reminders_enabled,reminder_minutes',
+          )
           .eq('id', user.id)
           .maybeSingle();
 
@@ -46,6 +50,9 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
       setState(() {
         _isTrainer =
             profile?['role']?.toString().trim().toLowerCase() == 'ausbilder';
+        _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;
+        _reminderMinutes =
+            (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;
       });
     } catch (_) {}
   }
@@ -62,7 +69,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
       final rows = await _supabase
           .from('training_plans')
           .select()
-          .order('valid_from', ascending: false);
+          .order('training_date', ascending: false)
+          .order('start_time', ascending: false);
 
       if (!mounted) return;
       setState(() {
@@ -78,52 +86,90 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
     }
   }
 
+  DateTime? _parseDate(dynamic value) {
+    if (value == null || value.toString().trim().isEmpty) return null;
+    return DateTime.tryParse(value.toString());
+  }
+
   String _date(dynamic value) {
-    if (value == null || value.toString().isEmpty) return '–';
-    final dt = DateTime.tryParse(value.toString());
-    if (dt == null) return value.toString();
+    final dt = _parseDate(value);
+    if (dt == null) return 'Kein Datum';
     return '${dt.day.toString().padLeft(2, '0')}.'
         '${dt.month.toString().padLeft(2, '0')}.${dt.year}';
   }
 
+  String _time(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return '–';
+    final parts = raw.split(':');
+    if (parts.length < 2) return raw;
+    return '${parts[0].padLeft(2, '0')}:${parts[1].padLeft(2, '0')}';
+  }
+
+  String _timeRange(Map<String, dynamic> plan) {
+    final start = _time(plan['start_time']);
+    final end = _time(plan['end_time']);
+    if (start == '–') return 'Keine Uhrzeit';
+    if (end == '–') return '$start Uhr';
+    return '$start – $end Uhr';
+  }
+
+  String _reminderLabel() {
+    if (!_eventRemindersEnabled) return 'Ausgeschaltet';
+
+    switch (_reminderMinutes) {
+      case 15:
+        return '15 Min. vorher';
+      case 30:
+        return '30 Min. vorher';
+      case 60:
+        return '1 Std. vorher';
+      case 120:
+        return '2 Std. vorher';
+      case 180:
+        return '3 Std. vorher';
+      case 1440:
+        return '1 Tag vorher';
+      default:
+        if (_reminderMinutes % 60 == 0) {
+          return '${_reminderMinutes ~/ 60} Std. vorher';
+        }
+        return '$_reminderMinutes Min. vorher';
+    }
+  }
+
   String _planStatus(Map<String, dynamic> plan) {
+    final date = _parseDate(plan['training_date']);
+    if (date == null) return 'geplant';
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
+    final planDay = DateTime(date.year, date.month, date.day);
 
-    final fromRaw = DateTime.tryParse(plan['valid_from']?.toString() ?? '');
-    final untilRaw = DateTime.tryParse(plan['valid_until']?.toString() ?? '');
-
-    final from = fromRaw == null
-        ? null
-        : DateTime(fromRaw.year, fromRaw.month, fromRaw.day);
-    final until = untilRaw == null
-        ? null
-        : DateTime(untilRaw.year, untilRaw.month, untilRaw.day);
-
-    if (from != null && from.isAfter(today)) return 'zukuenftig';
-    if (until != null && until.isBefore(today)) return 'abgelaufen';
-    return 'aktiv';
+    if (planDay.isBefore(today)) return 'vergangen';
+    if (planDay == today) return 'heute';
+    return 'geplant';
   }
 
   String _planStatusLabel(Map<String, dynamic> plan) {
     switch (_planStatus(plan)) {
-      case 'zukuenftig':
-        return 'Geplant';
-      case 'abgelaufen':
-        return 'Archiv';
+      case 'heute':
+        return 'Heute';
+      case 'vergangen':
+        return 'Vergangen';
       default:
-        return 'Aktiv';
+        return 'Geplant';
     }
   }
 
   Color _planStatusColor(Map<String, dynamic> plan) {
     switch (_planStatus(plan)) {
-      case 'zukuenftig':
-        return const Color(0xFF0B4EA2);
-      case 'abgelaufen':
+      case 'heute':
+        return const Color(0xFF13A05B);
+      case 'vergangen':
         return const Color(0xFF667085);
       default:
-        return const Color(0xFF13A05B);
+        return const Color(0xFF0B4EA2);
     }
   }
 
@@ -132,13 +178,18 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
 
     return _plans.where((plan) {
       final title = plan['title']?.toString().toLowerCase() ?? '';
+      final topic = plan['topic']?.toString().toLowerCase() ?? '';
+      final location = plan['location']?.toString().toLowerCase() ?? '';
       final description = plan['description']?.toString().toLowerCase() ?? '';
       final status = _planStatus(plan);
 
-      final matchesQuery =
-          query.isEmpty || title.contains(query) || description.contains(query);
-      final matchesStatus = _statusFilter == 'alle' || status == _statusFilter;
+      final matchesQuery = query.isEmpty ||
+          title.contains(query) ||
+          topic.contains(query) ||
+          location.contains(query) ||
+          description.contains(query);
 
+      final matchesStatus = _statusFilter == 'alle' || status == _statusFilter;
       return matchesQuery && matchesStatus;
     }).toList();
   }
@@ -167,7 +218,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Ausbildungsplan löschen?'),
         content: Text(
-          '„${plan['title'] ?? 'Ausbildungsplan'}“ wird vollständig gelöscht.',
+          '„${plan['title'] ?? 'Ausbildungsplan'}“ wird gelöscht.',
         ),
         actions: [
           TextButton(
@@ -210,6 +261,88 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
         SnackBar(content: Text('Löschen fehlgeschlagen: $e')),
       );
     }
+  }
+
+  void _showDetails(Map<String, dynamic> plan) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                plan['title']?.toString() ?? 'Ausbildungsplan',
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF0A1F44),
+                ),
+              ),
+              const SizedBox(height: 18),
+              _TrainingDetailRow(
+                icon: Icons.calendar_today_outlined,
+                title: 'Datum',
+                value: _date(plan['training_date']),
+              ),
+              _TrainingDetailRow(
+                icon: Icons.schedule_outlined,
+                title: 'Uhrzeit',
+                value: _timeRange(plan),
+              ),
+              if ((plan['topic'] ?? '').toString().trim().isNotEmpty)
+                _TrainingDetailRow(
+                  icon: Icons.menu_book_outlined,
+                  title: 'Thema',
+                  value: plan['topic'].toString(),
+                ),
+              if ((plan['location'] ?? '').toString().trim().isNotEmpty)
+                _TrainingDetailRow(
+                  icon: Icons.location_on_outlined,
+                  title: 'Ort',
+                  value: plan['location'].toString(),
+                ),
+              _TrainingDetailRow(
+                icon: _eventRemindersEnabled
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_off_outlined,
+                title: 'Erinnerung',
+                value: _reminderLabel(),
+              ),
+              if ((plan['description'] ?? '').toString().trim().isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const Text(
+                  'Beschreibung',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(plan['description'].toString()),
+              ],
+              if (_isTrainer) ...[
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _openPlanEditor(plan: plan);
+                    },
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Ausbildungsplan bearbeiten'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -263,7 +396,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       body: RefreshIndicator(
-        onRefresh: _loadPlans,
+        onRefresh: _loadAll,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -313,7 +446,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                             ),
                             SizedBox(height: 2),
                             Text(
-                              'Pläne, Themen und Lernziele',
+                              'Datum, Uhrzeit, Ort und Thema',
                               style: TextStyle(
                                 color: Colors.white70,
                                 fontSize: 14,
@@ -370,28 +503,25 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: Text('Aktiv (${_statusCount('aktiv')})'),
-                          selected: _statusFilter == 'aktiv',
+                          label: Text('Geplant (${_statusCount('geplant')})'),
+                          selected: _statusFilter == 'geplant',
                           onSelected: (_) =>
-                              setState(() => _statusFilter = 'aktiv'),
+                              setState(() => _statusFilter = 'geplant'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: Text(
-                            'Geplant (${_statusCount('zukuenftig')})',
-                          ),
-                          selected: _statusFilter == 'zukuenftig',
+                          label: Text('Heute (${_statusCount('heute')})'),
+                          selected: _statusFilter == 'heute',
                           onSelected: (_) =>
-                              setState(() => _statusFilter = 'zukuenftig'),
+                              setState(() => _statusFilter = 'heute'),
                         ),
                         const SizedBox(width: 8),
                         ChoiceChip(
-                          label: Text(
-                            'Archiv (${_statusCount('abgelaufen')})',
-                          ),
-                          selected: _statusFilter == 'abgelaufen',
+                          label:
+                              Text('Vergangen (${_statusCount('vergangen')})'),
+                          selected: _statusFilter == 'vergangen',
                           onSelected: (_) =>
-                              setState(() => _statusFilter = 'abgelaufen'),
+                              setState(() => _statusFilter = 'vergangen'),
                         ),
                       ],
                     ),
@@ -467,9 +597,11 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                         )
                       : Column(
                           children: _filteredPlans.map((plan) {
-                            final description =
-                                plan['description']?.toString().trim() ?? '';
                             final statusColor = _planStatusColor(plan);
+                            final topic =
+                                plan['topic']?.toString().trim() ?? '';
+                            final location =
+                                plan['location']?.toString().trim() ?? '';
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
@@ -488,20 +620,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                 ],
                               ),
                               child: InkWell(
+                                onTap: () => _showDetails(plan),
                                 borderRadius: BorderRadius.circular(20),
-                                onTap: () {
-                                  Navigator.of(context)
-                                      .push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              TrainingPlanDetailsScreen(
-                                            plan: plan,
-                                            isTrainer: _isTrainer,
-                                          ),
-                                        ),
-                                      )
-                                      .then((_) => _loadPlans());
-                                },
                                 child: Padding(
                                   padding: const EdgeInsets.all(16),
                                   child: Row(
@@ -509,8 +629,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Container(
-                                        width: 54,
-                                        height: 54,
+                                        width: 58,
+                                        height: 58,
                                         decoration: BoxDecoration(
                                           color: const Color(0xFFFFF0E0),
                                           borderRadius:
@@ -519,7 +639,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                         child: const Icon(
                                           Icons.school_outlined,
                                           color: orange,
-                                          size: 29,
+                                          size: 30,
                                         ),
                                       ),
                                       const SizedBox(width: 13),
@@ -545,7 +665,7 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                                 Container(
                                                   padding: const EdgeInsets
                                                       .symmetric(
-                                                    horizontal: 9,
+                                                    horizontal: 8,
                                                     vertical: 4,
                                                   ),
                                                   decoration: BoxDecoration(
@@ -555,7 +675,8 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                                     ),
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                            999),
+                                                      999,
+                                                    ),
                                                   ),
                                                   child: Text(
                                                     _planStatusLabel(plan),
@@ -569,55 +690,62 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                                 ),
                                               ],
                                             ),
-                                            if (description.isNotEmpty) ...[
+                                            if (topic.isNotEmpty) ...[
                                               const SizedBox(height: 5),
                                               Text(
-                                                description,
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
+                                                topic,
                                                 style: const TextStyle(
-                                                  color: Color(0xFF667085),
-                                                  height: 1.3,
+                                                  color: blue,
+                                                  fontWeight: FontWeight.w700,
                                                 ),
                                               ),
                                             ],
                                             const SizedBox(height: 10),
-                                            Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.date_range_outlined,
-                                                  size: 17,
-                                                  color: Color(0xFF98A2B3),
-                                                ),
-                                                const SizedBox(width: 6),
-                                                Expanded(
-                                                  child: Text(
-                                                    '${_date(plan['valid_from'])} – ${_date(plan['valid_until'])}',
-                                                    style: const TextStyle(
-                                                      color: Color(0xFF667085),
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
+                                            _CompactInfo(
+                                              icon:
+                                                  Icons.calendar_today_outlined,
+                                              text:
+                                                  _date(plan['training_date']),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            _CompactInfo(
+                                              icon: Icons.schedule_outlined,
+                                              text: _timeRange(plan),
+                                            ),
+                                            if (location.isNotEmpty) ...[
+                                              const SizedBox(height: 6),
+                                              _CompactInfo(
+                                                icon:
+                                                    Icons.location_on_outlined,
+                                                text: location,
+                                              ),
+                                            ],
+                                            const SizedBox(height: 6),
+                                            _CompactInfo(
+                                              icon: _eventRemindersEnabled
+                                                  ? Icons
+                                                      .notifications_active_outlined
+                                                  : Icons
+                                                      .notifications_off_outlined,
+                                              text:
+                                                  'Erinnerung: ${_reminderLabel()}',
                                             ),
                                             if (_isTrainer) ...[
                                               const SizedBox(height: 10),
                                               Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.end,
                                                 children: [
-                                                  OutlinedButton.icon(
+                                                  IconButton(
+                                                    tooltip: 'Bearbeiten',
                                                     onPressed: () =>
                                                         _openPlanEditor(
-                                                            plan: plan),
+                                                      plan: plan,
+                                                    ),
                                                     icon: const Icon(
                                                       Icons.edit_outlined,
-                                                      size: 18,
                                                     ),
-                                                    label: const Text(
-                                                        'Bearbeiten'),
                                                   ),
-                                                  const SizedBox(width: 8),
                                                   IconButton(
                                                     tooltip: 'Löschen',
                                                     onPressed: () =>
@@ -632,10 +760,6 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                                             ],
                                           ],
                                         ),
-                                      ),
-                                      const Icon(
-                                        Icons.chevron_right,
-                                        color: Color(0xFF98A2B3),
                                       ),
                                     ],
                                   ),
@@ -660,532 +784,6 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
   }
 }
 
-class TrainingPlanDetailsScreen extends StatefulWidget {
-  final Map<String, dynamic> plan;
-  final bool isTrainer;
-
-  const TrainingPlanDetailsScreen({
-    super.key,
-    required this.plan,
-    required this.isTrainer,
-  });
-
-  @override
-  State<TrainingPlanDetailsScreen> createState() =>
-      _TrainingPlanDetailsScreenState();
-}
-
-class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
-  final _supabase = Supabase.instance.client;
-
-  bool _loading = true;
-  String? _error;
-  List<Map<String, dynamic>> _units = [];
-  String _unitSearch = '';
-  bool _eventRemindersEnabled = true;
-  int _reminderMinutes = 30;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadReminderSettings();
-    _loadUnits();
-  }
-
-  Future<void> _loadReminderSettings() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final profile = await _supabase
-          .from('profiles')
-          .select('event_reminders_enabled,reminder_minutes')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (!mounted) return;
-
-      setState(() {
-        _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;
-        _reminderMinutes =
-            (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;
-      });
-    } catch (_) {
-      // Standardwerte beibehalten.
-    }
-  }
-
-  String _reminderLabel() {
-    if (!_eventRemindersEnabled) return 'Ausgeschaltet';
-
-    switch (_reminderMinutes) {
-      case 15:
-        return '15 Min. vorher';
-      case 30:
-        return '30 Min. vorher';
-      case 60:
-        return '1 Std. vorher';
-      case 120:
-        return '2 Std. vorher';
-      case 180:
-        return '3 Std. vorher';
-      case 1440:
-        return '1 Tag vorher';
-      default:
-        if (_reminderMinutes % 60 == 0) {
-          return '${_reminderMinutes ~/ 60} Std. vorher';
-        }
-        return '$_reminderMinutes Min. vorher';
-    }
-  }
-
-  Map<String, dynamic>? _linkedEvent(Map<String, dynamic> unit) {
-    final raw = unit['events'];
-    if (raw is Map<String, dynamic>) return raw;
-    if (raw is Map) return Map<String, dynamic>.from(raw);
-    return null;
-  }
-
-  String _linkedEventSummary(Map<String, dynamic> event) {
-    final title = event['title']?.toString().trim() ?? '';
-    final parsed = DateTime.tryParse(event['starts_at']?.toString() ?? '');
-    final local = parsed?.toLocal();
-
-    String dateTime = '';
-    if (local != null) {
-      String two(int value) => value.toString().padLeft(2, '0');
-      dateTime = '${two(local.day)}.${two(local.month)}.${local.year} · '
-          '${two(local.hour)}:${two(local.minute)} Uhr';
-    }
-
-    if (title.isEmpty) return dateTime;
-    if (dateTime.isEmpty) return title;
-    return '$title · $dateTime';
-  }
-
-  Future<void> _loadUnits() async {
-    if (mounted) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-
-    try {
-      final rows = await _supabase
-          .from('training_units')
-          .select('*, events(id,title,starts_at,ends_at,location)')
-          .eq('training_plan_id', widget.plan['id'])
-          .order('sort_order', ascending: true);
-
-      if (!mounted) return;
-      setState(() {
-        _units = List<Map<String, dynamic>>.from(rows);
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
-    }
-  }
-
-  Future<void> _openUnitEditor({Map<String, dynamic>? unit}) async {
-    final changed = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      builder: (_) => _TrainingUnitEditor(
-        trainingPlanId: widget.plan['id'].toString(),
-        unit: unit,
-        suggestedOrder: unit == null ? _units.length + 1 : null,
-      ),
-    );
-
-    if (changed == true) {
-      await _loadUnits();
-    }
-  }
-
-  Future<void> _deleteUnit(Map<String, dynamic> unit) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ausbildungseinheit löschen?'),
-        content: Text(
-          '„${unit['title'] ?? 'Einheit'}“ wird gelöscht.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Löschen'),
-          ),
-        ],
-      ),
-    );
-
-    if (ok != true) return;
-
-    await _supabase.from('training_units').delete().eq('id', unit['id']);
-
-    try {
-      await _supabase.functions.invoke(
-        'send-push',
-        body: {
-          'title': 'Ausbildungseinheit gelöscht',
-          'body': '${unit['title'] ?? 'Ausbildungseinheit'} wurde entfernt.',
-        },
-      );
-    } catch (pushError) {
-      debugPrint(
-          'Ausbildungseinheit gelöscht, Push fehlgeschlagen: $pushError');
-    }
-
-    if (!mounted) return;
-    await _loadUnits();
-  }
-
-  List<Map<String, dynamic>> get _filteredUnits {
-    final query = _unitSearch.trim().toLowerCase();
-    if (query.isEmpty) return _units;
-
-    return _units.where((unit) {
-      final title = unit['title']?.toString().toLowerCase() ?? '';
-      final topic = unit['topic']?.toString().toLowerCase() ?? '';
-      final objectives = unit['objectives']?.toString().toLowerCase() ?? '';
-      return title.contains(query) ||
-          topic.contains(query) ||
-          objectives.contains(query);
-    }).toList();
-  }
-
-  int get _totalDurationMinutes {
-    var total = 0;
-    for (final unit in _units) {
-      final raw = unit['duration_minutes'];
-      if (raw is int) {
-        total += raw;
-      } else {
-        total += int.tryParse(raw?.toString() ?? '') ?? 0;
-      }
-    }
-    return total;
-  }
-
-  Widget _detail(String label, dynamic value, IconData icon) {
-    final text = value?.toString().trim() ?? '';
-    if (text.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFFE30613)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: DefaultTextStyle.of(context).style,
-                children: [
-                  TextSpan(
-                    text: '$label: ',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  TextSpan(text: text),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const navy = Color(0xFF0A1F44);
-    const blue = Color(0xFF0B4EA2);
-    const red = Color(0xFFE30613);
-    const orange = Color(0xFFFF7A00);
-
-    final title = widget.plan['title']?.toString() ?? 'Ausbildungsplan';
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5F7),
-      appBar: AppBar(
-        title: Text(title),
-        backgroundColor: navy,
-        foregroundColor: Colors.white,
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Text(
-                      'Fehler beim Laden:\n$_error',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadUnits,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if ((widget.plan['description'] ?? '')
-                          .toString()
-                          .isNotEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: const Color(0xFFE3E8EE),
-                            ),
-                          ),
-                          child: Text(
-                            widget.plan['description'].toString(),
-                            style: const TextStyle(
-                              color: Color(0xFF475467),
-                              fontSize: 16,
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      const SizedBox(height: 18),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAF2FB),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.menu_book_outlined,
-                              color: blue,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                '${_units.length} Einheiten · '
-                                '$_totalDurationMinutes Minuten gesamt',
-                                style: const TextStyle(
-                                  color: navy,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        onChanged: (value) =>
-                            setState(() => _unitSearch = value),
-                        decoration: const InputDecoration(
-                          hintText: 'Einheit oder Thema suchen',
-                          prefixIcon: Icon(Icons.search),
-                          filled: true,
-                          fillColor: Colors.white,
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Ausbildungseinheiten',
-                              style: TextStyle(
-                                color: navy,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFEAF2FB),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              '${_units.length}',
-                              style: const TextStyle(
-                                color: blue,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      if (_units.isEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(24),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: const Color(0xFFE3E8EE),
-                            ),
-                          ),
-                          child: const Text(
-                            'Noch keine Ausbildungseinheiten angelegt.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF667085),
-                            ),
-                          ),
-                        ),
-                      if (_units.isNotEmpty && _filteredUnits.isEmpty)
-                        const Card(
-                          child: ListTile(
-                            leading: Icon(Icons.search_off),
-                            title: Text(
-                              'Keine passenden Ausbildungseinheiten gefunden.',
-                            ),
-                          ),
-                        ),
-                      ..._filteredUnits.map((unit) {
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: const Color(0xFFE3E8EE),
-                            ),
-                          ),
-                          child: ExpansionTile(
-                            shape: const Border(),
-                            collapsedShape: const Border(),
-                            leading: CircleAvatar(
-                              backgroundColor: const Color(0xFFFFF0E0),
-                              foregroundColor: orange,
-                              child: Text(
-                                (unit['sort_order'] ?? 0).toString(),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                            title: Text(
-                              unit['title']?.toString() ?? 'Einheit',
-                              style: const TextStyle(
-                                color: navy,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            subtitle: (unit['topic'] ?? '').toString().isEmpty
-                                ? null
-                                : Text(
-                                    unit['topic'].toString(),
-                                    style: const TextStyle(
-                                      color: Color(0xFF667085),
-                                    ),
-                                  ),
-                            childrenPadding: const EdgeInsets.fromLTRB(
-                              16,
-                              0,
-                              16,
-                              16,
-                            ),
-                            children: [
-                              if (_linkedEvent(unit) != null) ...[
-                                _detail(
-                                  'Termin',
-                                  _linkedEventSummary(_linkedEvent(unit)!),
-                                  Icons.event_outlined,
-                                ),
-                                _detail(
-                                  'Erinnerung',
-                                  _reminderLabel(),
-                                  _eventRemindersEnabled
-                                      ? Icons.notifications_active_outlined
-                                      : Icons.notifications_off_outlined,
-                                ),
-                              ],
-                              _detail(
-                                'Lernziel',
-                                unit['objectives'],
-                                Icons.flag_outlined,
-                              ),
-                              _detail(
-                                'Dauer',
-                                unit['duration_minutes'] == null
-                                    ? null
-                                    : '${unit['duration_minutes']} Minuten',
-                                Icons.schedule,
-                              ),
-                              _detail(
-                                'Material',
-                                unit['equipment'],
-                                Icons.construction_outlined,
-                              ),
-                              _detail(
-                                'Inhalt',
-                                unit['content'],
-                                Icons.notes,
-                              ),
-                              if (widget.isTrainer) ...[
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    OutlinedButton.icon(
-                                      onPressed: () =>
-                                          _openUnitEditor(unit: unit),
-                                      icon: const Icon(Icons.edit),
-                                      label: const Text('Bearbeiten'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      tooltip: 'Löschen',
-                                      onPressed: () => _deleteUnit(unit),
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        color: red,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      }),
-                      const SizedBox(height: 90),
-                    ],
-                  ),
-                ),
-      floatingActionButton: widget.isTrainer
-          ? FloatingActionButton(
-              onPressed: () => _openUnitEditor(),
-              backgroundColor: red,
-              foregroundColor: Colors.white,
-              child: const Icon(Icons.add),
-            )
-          : null,
-    );
-  }
-}
-
 class _TrainingPlanEditor extends StatefulWidget {
   final Map<String, dynamic>? plan;
 
@@ -1200,71 +798,132 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
   final _supabase = Supabase.instance.client;
 
   late final TextEditingController _title;
+  late final TextEditingController _topic;
+  late final TextEditingController _location;
   late final TextEditingController _description;
-  DateTime? _validFrom;
-  DateTime? _validUntil;
+
+  DateTime? _trainingDate;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
+
     _title = TextEditingController(
       text: widget.plan?['title']?.toString() ?? '',
+    );
+    _topic = TextEditingController(
+      text: widget.plan?['topic']?.toString() ?? '',
+    );
+    _location = TextEditingController(
+      text: widget.plan?['location']?.toString() ?? '',
     );
     _description = TextEditingController(
       text: widget.plan?['description']?.toString() ?? '',
     );
-    _validFrom = DateTime.tryParse(
-      widget.plan?['valid_from']?.toString() ?? '',
+
+    _trainingDate = DateTime.tryParse(
+      widget.plan?['training_date']?.toString() ?? '',
     );
-    _validUntil = DateTime.tryParse(
-      widget.plan?['valid_until']?.toString() ?? '',
-    );
+    _startTime = _parseTime(widget.plan?['start_time']);
+    _endTime = _parseTime(widget.plan?['end_time']);
   }
 
-  String _isoDate(DateTime? date) {
-    if (date == null) return '';
+  TimeOfDay? _parseTime(dynamic value) {
+    final raw = value?.toString().trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    final parts = raw.split(':');
+    if (parts.length < 2) return null;
+
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _isoDate(DateTime date) {
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';
   }
 
+  String _dbTime(TimeOfDay? value) {
+    if (value == null) return '';
+    return '${value.hour.toString().padLeft(2, '0')}:'
+        '${value.minute.toString().padLeft(2, '0')}:00';
+  }
+
   String _displayDate(DateTime? date) {
-    if (date == null) return 'Nicht gesetzt';
+    if (date == null) return 'Datum auswählen';
     return '${date.day.toString().padLeft(2, '0')}.'
         '${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
 
-  Future<void> _pickDate(bool from) async {
-    final current = from ? _validFrom : _validUntil;
+  String _displayTime(TimeOfDay? time) {
+    if (time == null) return 'Uhrzeit auswählen';
+    return '${time.hour.toString().padLeft(2, '0')}:'
+        '${time.minute.toString().padLeft(2, '0')} Uhr';
+  }
 
+  Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
-      initialDate: current ?? DateTime.now(),
+      initialDate: _trainingDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
 
     if (picked == null) return;
+    setState(() => _trainingDate = picked);
+  }
+
+  Future<void> _pickTime(bool start) async {
+    final current = start ? _startTime : _endTime;
+
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: current ?? TimeOfDay.now(),
+    );
+
+    if (picked == null) return;
 
     setState(() {
-      if (from) {
-        _validFrom = picked;
+      if (start) {
+        _startTime = picked;
       } else {
-        _validUntil = picked;
+        _endTime = picked;
       }
     });
   }
 
+  int _minutesOfDay(TimeOfDay time) => time.hour * 60 + time.minute;
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_validFrom != null &&
-        _validUntil != null &&
-        _validUntil!.isBefore(_validFrom!)) {
+    if (_trainingDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bitte ein Datum auswählen.')),
+      );
+      return;
+    }
+
+    if (_startTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bitte eine Startzeit auswählen.')),
+      );
+      return;
+    }
+
+    if (_endTime != null &&
+        _minutesOfDay(_endTime!) <= _minutesOfDay(_startTime!)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Das Enddatum liegt vor dem Startdatum.'),
+          content: Text('Die Endzeit muss nach der Startzeit liegen.'),
         ),
       );
       return;
@@ -1277,10 +936,15 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
 
     final data = {
       'title': _title.text.trim(),
+      'topic': _topic.text.trim().isEmpty ? null : _topic.text.trim(),
+      'location': _location.text.trim().isEmpty ? null : _location.text.trim(),
       'description':
           _description.text.trim().isEmpty ? null : _description.text.trim(),
-      'valid_from': _validFrom == null ? null : _isoDate(_validFrom),
-      'valid_until': _validUntil == null ? null : _isoDate(_validUntil),
+      'training_date': _isoDate(_trainingDate!),
+      'start_time': _dbTime(_startTime),
+      'end_time': _endTime == null ? null : _dbTime(_endTime),
+      'valid_from': _isoDate(_trainingDate!),
+      'valid_until': _isoDate(_trainingDate!),
     };
 
     try {
@@ -1295,12 +959,15 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
             'send-push',
             body: {
               'title': 'Neuer Ausbildungsplan',
-              'body': _title.text.trim(),
+              'body': _topic.text.trim().isEmpty
+                  ? _title.text.trim()
+                  : _topic.text.trim(),
             },
           );
         } catch (pushError) {
           debugPrint(
-              'Ausbildungsplan gespeichert, Push fehlgeschlagen: $pushError');
+            'Ausbildungsplan gespeichert, Push fehlgeschlagen: $pushError',
+          );
         }
       } else {
         await _supabase
@@ -1313,12 +980,15 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
             'send-push',
             body: {
               'title': 'Ausbildungsplan geändert',
-              'body': _title.text.trim(),
+              'body': _topic.text.trim().isEmpty
+                  ? _title.text.trim()
+                  : _topic.text.trim(),
             },
           );
         } catch (pushError) {
           debugPrint(
-              'Ausbildungsplan geändert, Push fehlgeschlagen: $pushError');
+            'Ausbildungsplan geändert, Push fehlgeschlagen: $pushError',
+          );
         }
       }
 
@@ -1336,6 +1006,8 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
   @override
   void dispose() {
     _title.dispose();
+    _topic.dispose();
+    _location.dispose();
     _description.dispose();
     super.dispose();
   }
@@ -1377,30 +1049,76 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
               ),
               const SizedBox(height: 12),
               TextFormField(
+                controller: _topic,
+                decoration: const InputDecoration(
+                  labelText: 'Thema *',
+                  prefixIcon: Icon(Icons.menu_book_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Bitte ein Thema eingeben.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.calendar_today_outlined),
+                title: const Text('Datum *'),
+                subtitle: Text(_displayDate(_trainingDate)),
+                trailing: const Icon(Icons.edit_calendar_outlined),
+                onTap: _pickDate,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule_outlined),
+                title: const Text('Startzeit *'),
+                subtitle: Text(_displayTime(_startTime)),
+                trailing: const Icon(Icons.access_time),
+                onTap: () => _pickTime(true),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.schedule),
+                title: const Text('Endzeit'),
+                subtitle: Text(_displayTime(_endTime)),
+                trailing: Wrap(
+                  spacing: 4,
+                  children: [
+                    if (_endTime != null)
+                      IconButton(
+                        tooltip: 'Endzeit entfernen',
+                        onPressed: () => setState(() => _endTime = null),
+                        icon: const Icon(Icons.close),
+                      ),
+                    IconButton(
+                      tooltip: 'Endzeit auswählen',
+                      onPressed: () => _pickTime(false),
+                      icon: const Icon(Icons.access_time),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _location,
+                decoration: const InputDecoration(
+                  labelText: 'Ort *',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) => value == null || value.trim().isEmpty
+                    ? 'Bitte einen Ort eingeben.'
+                    : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
                 controller: _description,
                 minLines: 3,
-                maxLines: 5,
+                maxLines: 6,
                 decoration: const InputDecoration(
                   labelText: 'Beschreibung',
                   border: OutlineInputBorder(),
                 ),
-              ),
-              const SizedBox(height: 14),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.date_range),
-                title: const Text('Gültig ab'),
-                subtitle: Text(_displayDate(_validFrom)),
-                trailing: const Icon(Icons.edit_calendar),
-                onTap: () => _pickDate(true),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.event_available),
-                title: const Text('Gültig bis'),
-                subtitle: Text(_displayDate(_validUntil)),
-                trailing: const Icon(Icons.edit_calendar),
-                onTap: () => _pickDate(false),
               ),
               const SizedBox(height: 18),
               SizedBox(
@@ -1411,9 +1129,7 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
                       ? const SizedBox(
                           width: 18,
                           height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save),
                   label: Text(
@@ -1429,350 +1145,83 @@ class _TrainingPlanEditorState extends State<_TrainingPlanEditor> {
   }
 }
 
-class _TrainingUnitEditor extends StatefulWidget {
-  final String trainingPlanId;
-  final Map<String, dynamic>? unit;
-  final int? suggestedOrder;
+class _CompactInfo extends StatelessWidget {
+  final IconData icon;
+  final String text;
 
-  const _TrainingUnitEditor({
-    required this.trainingPlanId,
-    this.unit,
-    this.suggestedOrder,
+  const _CompactInfo({
+    required this.icon,
+    required this.text,
   });
 
   @override
-  State<_TrainingUnitEditor> createState() => _TrainingUnitEditorState();
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 17,
+          color: const Color(0xFF73808F),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Color(0xFF4B5563),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
-  final _formKey = GlobalKey<FormState>();
-  final _supabase = Supabase.instance.client;
+class _TrainingDetailRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
 
-  late final TextEditingController _title;
-  late final TextEditingController _topic;
-  late final TextEditingController _objectives;
-  late final TextEditingController _duration;
-  late final TextEditingController _equipment;
-  late final TextEditingController _content;
-  late final TextEditingController _sortOrder;
-  bool _saving = false;
-  bool _loadingEvents = true;
-  List<Map<String, dynamic>> _availableEvents = [];
-  String? _selectedEventId;
-
-  @override
-  void initState() {
-    super.initState();
-    _title = TextEditingController(
-      text: widget.unit?['title']?.toString() ?? '',
-    );
-    _topic = TextEditingController(
-      text: widget.unit?['topic']?.toString() ?? '',
-    );
-    _objectives = TextEditingController(
-      text: widget.unit?['objectives']?.toString() ?? '',
-    );
-    _duration = TextEditingController(
-      text: widget.unit?['duration_minutes']?.toString() ?? '',
-    );
-    _equipment = TextEditingController(
-      text: widget.unit?['equipment']?.toString() ?? '',
-    );
-    _content = TextEditingController(
-      text: widget.unit?['content']?.toString() ?? '',
-    );
-    _sortOrder = TextEditingController(
-      text: widget.unit?['sort_order']?.toString() ??
-          (widget.suggestedOrder ?? 0).toString(),
-    );
-    _selectedEventId = widget.unit?['event_id']?.toString();
-    _loadAvailableEvents();
-  }
-
-  Future<void> _loadAvailableEvents() async {
-    try {
-      final rows = await _supabase
-          .from('events')
-          .select('id,title,starts_at,location')
-          .order('starts_at', ascending: true);
-
-      if (!mounted) return;
-
-      setState(() {
-        _availableEvents = List<Map<String, dynamic>>.from(rows);
-        _loadingEvents = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loadingEvents = false);
-    }
-  }
-
-  String _eventOptionLabel(Map<String, dynamic> event) {
-    final title = event['title']?.toString().trim() ?? 'Termin';
-    final parsed = DateTime.tryParse(event['starts_at']?.toString() ?? '');
-    final local = parsed?.toLocal();
-
-    if (local == null) return title;
-
-    String two(int value) => value.toString().padLeft(2, '0');
-    return '$title · ${two(local.day)}.${two(local.month)}.${local.year} '
-        '${two(local.hour)}:${two(local.minute)} Uhr';
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final durationText = _duration.text.trim();
-    final duration = durationText.isEmpty ? null : int.tryParse(durationText);
-    if (durationText.isNotEmpty && (duration == null || duration <= 0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Die Dauer muss eine Zahl größer als 0 sein.'),
-        ),
-      );
-      return;
-    }
-
-    final sortOrder = int.tryParse(_sortOrder.text.trim());
-    if (sortOrder == null || sortOrder < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Die Reihenfolge muss 0 oder größer sein.'),
-        ),
-      );
-      return;
-    }
-
-    final data = {
-      'training_plan_id': widget.trainingPlanId,
-      'event_id': _selectedEventId,
-      'title': _title.text.trim(),
-      'topic': _topic.text.trim().isEmpty ? null : _topic.text.trim(),
-      'objectives':
-          _objectives.text.trim().isEmpty ? null : _objectives.text.trim(),
-      'duration_minutes': duration,
-      'equipment':
-          _equipment.text.trim().isEmpty ? null : _equipment.text.trim(),
-      'content': _content.text.trim().isEmpty ? null : _content.text.trim(),
-      'sort_order': sortOrder,
-    };
-
-    setState(() => _saving = true);
-
-    try {
-      if (widget.unit == null) {
-        await _supabase.from('training_units').insert(data);
-
-        try {
-          await _supabase.functions.invoke(
-            'send-push',
-            body: {
-              'title': 'Neue Ausbildungseinheit',
-              'body': _title.text.trim(),
-            },
-          );
-        } catch (pushError) {
-          debugPrint(
-              'Ausbildungseinheit gespeichert, Push fehlgeschlagen: $pushError');
-        }
-      } else {
-        await _supabase
-            .from('training_units')
-            .update(data)
-            .eq('id', widget.unit!['id']);
-
-        try {
-          await _supabase.functions.invoke(
-            'send-push',
-            body: {
-              'title': 'Ausbildungseinheit geändert',
-              'body': _title.text.trim(),
-            },
-          );
-        } catch (pushError) {
-          debugPrint(
-              'Ausbildungseinheit geändert, Push fehlgeschlagen: $pushError');
-        }
-      }
-
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Speichern fehlgeschlagen: $e')),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _title.dispose();
-    _topic.dispose();
-    _objectives.dispose();
-    _duration.dispose();
-    _equipment.dispose();
-    _content.dispose();
-    _sortOrder.dispose();
-    super.dispose();
-  }
+  const _TrainingDetailRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-      ),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.unit == null
-                    ? 'Ausbildungseinheit erstellen'
-                    : 'Ausbildungseinheit bearbeiten',
-                style: const TextStyle(
-                  fontSize: 23,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 18),
-              TextFormField(
-                controller: _title,
-                decoration: const InputDecoration(
-                  labelText: 'Titel *',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Bitte einen Titel eingeben.'
-                    : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _topic,
-                decoration: const InputDecoration(
-                  labelText: 'Thema',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (_loadingEvents)
-                const LinearProgressIndicator()
-              else
-                DropdownButtonFormField<String>(
-                  initialValue: _selectedEventId ?? '',
-                  decoration: const InputDecoration(
-                    labelText: 'Mit Termin verknüpfen',
-                    prefixIcon: Icon(Icons.event_outlined),
-                    border: OutlineInputBorder(),
-                  ),
-                  items: [
-                    const DropdownMenuItem<String>(
-                      value: '',
-                      child: Text('Kein Termin verknüpft'),
-                    ),
-                    ..._availableEvents.map(
-                      (event) => DropdownMenuItem<String>(
-                        value: event['id']?.toString() ?? '',
-                        child: Text(
-                          _eventOptionLabel(event),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedEventId =
-                          value == null || value.isEmpty ? null : value;
-                    });
-                  },
-                ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _objectives,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Lernziele',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _duration,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Dauer (Min.)',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _sortOrder,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Reihenfolge',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _equipment,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Benötigtes Material',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _content,
-                minLines: 4,
-                maxLines: 8,
-                decoration: const InputDecoration(
-                  labelText: 'Ausbildungsinhalt / Ablauf',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _saving ? null : _save,
-                  icon: _saving
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.save),
-                  label: Text(
-                    widget.unit == null ? 'Erstellen' : 'Speichern',
-                  ),
-                ),
-              ),
-            ],
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            icon,
+            color: const Color(0xFFE30613),
+            size: 22,
           ),
-        ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 90,
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF667085),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF101828),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
