@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/home_navigation.dart';
+
 enum LegalSection { datenschutz, kontakt }
 
 class LegalScreen extends StatelessWidget {
@@ -18,6 +20,13 @@ class LegalScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: Text(
           privacy ? 'Datenschutz' : 'Kontakt & Verantwortliche Stelle',
         ),

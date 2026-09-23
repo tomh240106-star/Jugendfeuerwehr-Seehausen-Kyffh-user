@@ -2,7 +2,7 @@ name: jf_seehausen_kyffhaeuser
 description: Jugendfeuerwehr Seehausen/Kyffhäuser App
 publish_to: "none"
 
-version: 1.0.8+10
+version: 1.0.9+11
 environment:
   sdk: ">=3.3.0 <4.0.0"
 

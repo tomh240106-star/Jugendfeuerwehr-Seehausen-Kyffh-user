@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../services/home_navigation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class TrainingPlansScreen extends StatefulWidget {
@@ -418,6 +420,16 @@ class _TrainingPlansScreenState extends State<TrainingPlansScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                   child: Row(
                     children: [
+                      IconButton(
+                        tooltip: 'Zur Startseite',
+                        onPressed: () => HomeNavigation.goHome(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: navy,
+                        ),
+                        icon: const Icon(Icons.home_outlined),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         width: 48,
                         height: 48,

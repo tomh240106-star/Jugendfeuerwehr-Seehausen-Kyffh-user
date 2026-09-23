@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import '../services/home_navigation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -31,6 +33,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    HomeNavigation.register(_goHomeFromAnywhere);
     _refreshBadges();
 
     _pushOpenSubscription = PushService.openEvents.listen(
@@ -47,6 +50,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   void dispose() {
+    HomeNavigation.unregister();
     _pushOpenSubscription?.cancel();
     super.dispose();
   }
@@ -77,6 +81,12 @@ class _HomeShellState extends State<HomeShell> {
         _openTab(3);
         break;
     }
+  }
+
+  void _goHomeFromAnywhere() {
+    if (!mounted) return;
+    setState(() => _selectedIndex = 0);
+    _refreshBadges();
   }
 
   void _openTab(int index) {
@@ -1139,6 +1149,16 @@ class _MoreScreenState extends State<_MoreScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                 child: Row(
                   children: [
+                    IconButton(
+                      tooltip: 'Zur Startseite',
+                      onPressed: () => HomeNavigation.goHome(context),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: _navy,
+                      ),
+                      icon: const Icon(Icons.home_outlined),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
                       width: 48,
                       height: 48,
@@ -1696,6 +1716,13 @@ class _ParentAreaScreenState extends State<_ParentAreaScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: const Text('Meine Kinder'),
         backgroundColor: _navy,
         foregroundColor: Colors.white,
@@ -2098,6 +2125,13 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: const Text('Mein Profil'),
         backgroundColor: _navy,
         foregroundColor: Colors.white,
@@ -2456,6 +2490,13 @@ class _InfoScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: const Text('Über die App'),
       ),
       body: ListView(

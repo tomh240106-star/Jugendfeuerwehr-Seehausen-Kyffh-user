@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../services/home_navigation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MessagesScreen extends StatefulWidget {
@@ -255,6 +257,16 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                   child: Row(
                     children: [
+                      IconButton(
+                        tooltip: 'Zur Startseite',
+                        onPressed: () => HomeNavigation.goHome(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: navy,
+                        ),
+                        icon: const Icon(Icons.home_outlined),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         width: 48,
                         height: 48,
@@ -958,6 +970,13 @@ class _ChatScreenState extends State<ChatScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: Text(title),
         backgroundColor: navy,
         foregroundColor: Colors.white,

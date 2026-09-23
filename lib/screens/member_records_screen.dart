@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../services/home_navigation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MemberRecordsScreen extends StatefulWidget {
@@ -112,6 +114,13 @@ class _MemberRecordsScreenState extends State<MemberRecordsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: const Text('Stammblätter'),
         backgroundColor: Colors.white,
         foregroundColor: _navy,
@@ -424,6 +433,13 @@ class _MemberRecordEditorState extends State<_MemberRecordEditor> {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F7),
       appBar: AppBar(
+        actions: [
+          IconButton(
+            tooltip: 'Zur Startseite',
+            onPressed: () => HomeNavigation.goHome(context),
+            icon: const Icon(Icons.home_outlined),
+          ),
+        ],
         title: Text(memberName),
         backgroundColor: Colors.white,
         foregroundColor: _navy,

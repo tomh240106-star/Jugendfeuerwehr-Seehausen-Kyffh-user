@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../services/home_navigation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -613,6 +615,16 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                   child: Row(
                     children: [
+                      IconButton(
+                        tooltip: 'Zur Startseite',
+                        onPressed: () => HomeNavigation.goHome(context),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: navy,
+                        ),
+                        icon: const Icon(Icons.home_outlined),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         width: 48,
                         height: 48,
