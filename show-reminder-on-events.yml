@@ -1,0 +1,126 @@
+name: Show Reminder On Events
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch event reminder display
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+
+          helper = base64.b64decode("ICBTdHJpbmcgX3JlbWluZGVyTGFiZWwoKSB7CiAgICBpZiAoIV9ldmVudFJlbWluZGVyc0VuYWJsZWQpIHJldHVybiAnQXVzZ2VzY2hhbHRldCc7CgogICAgc3dpdGNoIChfcmVtaW5kZXJNaW51dGVzKSB7CiAgICAgIGNhc2UgMTU6CiAgICAgICAgcmV0dXJuICcxNSBNaW4uIHZvcmhlcic7CiAgICAgIGNhc2UgMzA6CiAgICAgICAgcmV0dXJuICczMCBNaW4uIHZvcmhlcic7CiAgICAgIGNhc2UgNjA6CiAgICAgICAgcmV0dXJuICcxIFN0ZC4gdm9yaGVyJzsKICAgICAgY2FzZSAxMjA6CiAgICAgICAgcmV0dXJuICcyIFN0ZC4gdm9yaGVyJzsKICAgICAgY2FzZSAxODA6CiAgICAgICAgcmV0dXJuICczIFN0ZC4gdm9yaGVyJzsKICAgICAgY2FzZSAxNDQwOgogICAgICAgIHJldHVybiAnMSBUYWcgdm9yaGVyJzsKICAgICAgZGVmYXVsdDoKICAgICAgICBpZiAoX3JlbWluZGVyTWludXRlcyAlIDYwID09IDApIHsKICAgICAgICAgIHJldHVybiAnJHtfcmVtaW5kZXJNaW51dGVzIH4vIDYwfSBTdGQuIHZvcmhlcic7CiAgICAgICAgfQogICAgICAgIHJldHVybiAnJF9yZW1pbmRlck1pbnV0ZXMgTWluLiB2b3JoZXInOwogICAgfQogIH0KCg==").decode()
+          detail_block = base64.b64decode("ICAgICAgICAgICAgICBfRGV0YWlsUm93KAogICAgICAgICAgICAgICAgaWNvbjogX2V2ZW50UmVtaW5kZXJzRW5hYmxlZAogICAgICAgICAgICAgICAgICAgID8gSWNvbnMubm90aWZpY2F0aW9uc19hY3RpdmVfb3V0bGluZWQKICAgICAgICAgICAgICAgICAgICA6IEljb25zLm5vdGlmaWNhdGlvbnNfb2ZmX291dGxpbmVkLAogICAgICAgICAgICAgICAgdGl0bGU6ICdFcmlubmVydW5nJywKICAgICAgICAgICAgICAgIHZhbHVlOiBfcmVtaW5kZXJMYWJlbCgpLAogICAgICAgICAgICAgICksCg==").decode()
+          card_block = base64.b64decode("ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjb25zdCBTaXplZEJveChoZWlnaHQ6IDYpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIFJvdygKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkcmVuOiBbCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEljb24oCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgX2V2ZW50UmVtaW5kZXJzRW5hYmxlZAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA/IEljb25zLm5vdGlmaWNhdGlvbnNfYWN0aXZlX291dGxpbmVkCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDogSWNvbnMubm90aWZpY2F0aW9uc19vZmZfb3V0bGluZWQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2l6ZTogMTcsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IF9ldmVudFJlbWluZGVyc0VuYWJsZWQKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPyBjb25zdCBDb2xvcigweEZGMEI0RUEyKQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA6IGNvbnN0IENvbG9yKDB4RkY5OEEyQjMpLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjb25zdCBTaXplZEJveCh3aWR0aDogNiksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIEV4cGFuZGVkKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGNoaWxkOiBUZXh0KAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgJ0VyaW5uZXJ1bmc6ICR7X3JlbWluZGVyTGFiZWwoKX0nLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc3R5bGU6IFRleHRTdHlsZSgKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY29sb3I6IF9ldmVudFJlbWluZGVyc0VuYWJsZWQKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgID8gY29uc3QgQ29sb3IoMHhGRjBCNEVBMikKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDogY29uc3QgQ29sb3IoMHhGRjk4QTJCMyksCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIGZvbnRTaXplOiAxMywKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgZm9udFdlaWdodDogRm9udFdlaWdodC53NjAwLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgKSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApLAo=").decode()
+
+          path = Path("lib/screens/events_screen.dart")
+          text = path.read_text(encoding="utf-8")
+
+          if "bool _eventRemindersEnabled = true;" not in text:
+              anchor = "  String? _role;"
+              if anchor not in text:
+                  raise SystemExit("role state anchor not found")
+              text = text.replace(
+                  anchor,
+                  anchor + "\n  bool _eventRemindersEnabled = true;\n  int _reminderMinutes = 30;",
+                  1,
+              )
+
+          old_select = ".select('id, role')"
+          new_select = ".select('id, role, event_reminders_enabled, reminder_minutes')"
+          if new_select not in text:
+              if old_select not in text:
+                  raise SystemExit("role profile select not found")
+              text = text.replace(old_select, new_select, 1)
+
+          if "profile?['event_reminders_enabled']" not in text:
+              anchor = "        _isTrainer = role == 'ausbilder';"
+              if anchor not in text:
+                  raise SystemExit("trainer state anchor not found")
+              text = text.replace(
+                  anchor,
+                  anchor
+                  + "\n        _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;"
+                  + "\n        _reminderMinutes = (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;",
+                  1,
+              )
+
+          if "String _reminderLabel()" not in text:
+              anchor = "  String _attendanceLabel(String? status) {"
+              if anchor not in text:
+                  raise SystemExit("attendance helper anchor not found")
+              text = text.replace(anchor, helper + anchor, 1)
+
+          if "title: 'Erinnerung'," not in text:
+              anchor = """              if ((event['location'] ?? '').toString().isNotEmpty)
+                _DetailRow("""
+              pos = text.find(anchor)
+              if pos == -1:
+                  raise SystemExit("detail location anchor not found")
+              text = text[:pos] + detail_block + text[pos:]
+
+          card_start = text.find("children: _filteredEvents.map")
+          if card_start == -1:
+              raise SystemExit("event card section not found")
+
+          if "'Erinnerung: ${_reminderLabel()}'" not in text[card_start:]:
+              anchor = """                                            if ((event['location'] ?? '')
+                                                .toString()
+                                                .isNotEmpty) ...["""
+              pos = text.find(anchor, card_start)
+              if pos == -1:
+                  raise SystemExit("event card location anchor not found")
+              text = text[:pos] + card_block + text[pos:]
+
+          path.write_text(text, encoding="utf-8")
+
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          if "version: 1.0.5+7" in p:
+              p = p.replace("version: 1.0.5+7", "version: 1.0.6+8", 1)
+          elif "version: 1.0.6+8" not in p:
+              raise SystemExit("Expected version 1.0.5+7 not found")
+          pubspec.write_text(p, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/events_screen.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/events_screen.dart
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/events_screen.dart pubspec.yaml
+          git commit -m "Show reminder time on events"
+          git push origin main
