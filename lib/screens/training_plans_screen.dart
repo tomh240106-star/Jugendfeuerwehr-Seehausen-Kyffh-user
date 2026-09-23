@@ -682,11 +682,85 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
   String? _error;
   List<Map<String, dynamic>> _units = [];
   String _unitSearch = '';
+  bool _eventRemindersEnabled = true;
+  int _reminderMinutes = 30;
 
   @override
   void initState() {
     super.initState();
+    _loadReminderSettings();
     _loadUnits();
+  }
+
+  Future<void> _loadReminderSettings() async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      final profile = await _supabase
+          .from('profiles')
+          .select('event_reminders_enabled,reminder_minutes')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (!mounted) return;
+
+      setState(() {
+        _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;
+        _reminderMinutes =
+            (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;
+      });
+    } catch (_) {
+      // Standardwerte beibehalten.
+    }
+  }
+
+  String _reminderLabel() {
+    if (!_eventRemindersEnabled) return 'Ausgeschaltet';
+
+    switch (_reminderMinutes) {
+      case 15:
+        return '15 Min. vorher';
+      case 30:
+        return '30 Min. vorher';
+      case 60:
+        return '1 Std. vorher';
+      case 120:
+        return '2 Std. vorher';
+      case 180:
+        return '3 Std. vorher';
+      case 1440:
+        return '1 Tag vorher';
+      default:
+        if (_reminderMinutes % 60 == 0) {
+          return '${_reminderMinutes ~/ 60} Std. vorher';
+        }
+        return '$_reminderMinutes Min. vorher';
+    }
+  }
+
+  Map<String, dynamic>? _linkedEvent(Map<String, dynamic> unit) {
+    final raw = unit['events'];
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
+  }
+
+  String _linkedEventSummary(Map<String, dynamic> event) {
+    final title = event['title']?.toString().trim() ?? '';
+    final parsed = DateTime.tryParse(event['starts_at']?.toString() ?? '');
+    final local = parsed?.toLocal();
+
+    String dateTime = '';
+    if (local != null) {
+      String two(int value) => value.toString().padLeft(2, '0');
+      dateTime = '${two(local.day)}.${two(local.month)}.${local.year} · '
+          '${two(local.hour)}:${two(local.minute)} Uhr';
+    }
+
+    if (title.isEmpty) return dateTime;
+    if (dateTime.isEmpty) return title;
+    return '$title · $dateTime';
   }
 
   Future<void> _loadUnits() async {
@@ -700,7 +774,7 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
     try {
       final rows = await _supabase
           .from('training_units')
-          .select()
+          .select('*, events(id,title,starts_at,ends_at,location)')
           .eq('training_plan_id', widget.plan['id'])
           .order('sort_order', ascending: true);
 
@@ -1033,6 +1107,20 @@ class _TrainingPlanDetailsScreenState extends State<TrainingPlanDetailsScreen> {
                               16,
                             ),
                             children: [
+                              if (_linkedEvent(unit) != null) ...[
+                                _detail(
+                                  'Termin',
+                                  _linkedEventSummary(_linkedEvent(unit)!),
+                                  Icons.event_outlined,
+                                ),
+                                _detail(
+                                  'Erinnerung',
+                                  _reminderLabel(),
+                                  _eventRemindersEnabled
+                                      ? Icons.notifications_active_outlined
+                                      : Icons.notifications_off_outlined,
+                                ),
+                              ],
                               _detail(
                                 'Lernziel',
                                 unit['objectives'],
@@ -1368,6 +1456,9 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
   late final TextEditingController _content;
   late final TextEditingController _sortOrder;
   bool _saving = false;
+  bool _loadingEvents = true;
+  List<Map<String, dynamic>> _availableEvents = [];
+  String? _selectedEventId;
 
   @override
   void initState() {
@@ -1394,6 +1485,39 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
       text: widget.unit?['sort_order']?.toString() ??
           (widget.suggestedOrder ?? 0).toString(),
     );
+    _selectedEventId = widget.unit?['event_id']?.toString();
+    _loadAvailableEvents();
+  }
+
+  Future<void> _loadAvailableEvents() async {
+    try {
+      final rows = await _supabase
+          .from('events')
+          .select('id,title,starts_at,location')
+          .order('starts_at', ascending: true);
+
+      if (!mounted) return;
+
+      setState(() {
+        _availableEvents = List<Map<String, dynamic>>.from(rows);
+        _loadingEvents = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingEvents = false);
+    }
+  }
+
+  String _eventOptionLabel(Map<String, dynamic> event) {
+    final title = event['title']?.toString().trim() ?? 'Termin';
+    final parsed = DateTime.tryParse(event['starts_at']?.toString() ?? '');
+    final local = parsed?.toLocal();
+
+    if (local == null) return title;
+
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '$title · ${two(local.day)}.${two(local.month)}.${local.year} '
+        '${two(local.hour)}:${two(local.minute)} Uhr';
   }
 
   Future<void> _save() async {
@@ -1422,6 +1546,7 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
 
     final data = {
       'training_plan_id': widget.trainingPlanId,
+      'event_id': _selectedEventId,
       'title': _title.text.trim(),
       'topic': _topic.text.trim().isEmpty ? null : _topic.text.trim(),
       'objectives':
@@ -1537,6 +1662,39 @@ class _TrainingUnitEditorState extends State<_TrainingUnitEditor> {
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 12),
+              if (_loadingEvents)
+                const LinearProgressIndicator()
+              else
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedEventId ?? '',
+                  decoration: const InputDecoration(
+                    labelText: 'Mit Termin verknüpfen',
+                    prefixIcon: Icon(Icons.event_outlined),
+                    border: OutlineInputBorder(),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: '',
+                      child: Text('Kein Termin verknüpft'),
+                    ),
+                    ..._availableEvents.map(
+                      (event) => DropdownMenuItem<String>(
+                        value: event['id']?.toString() ?? '',
+                        child: Text(
+                          _eventOptionLabel(event),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedEventId =
+                          value == null || value.isEmpty ? null : value;
+                    });
+                  },
+                ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _objectives,
