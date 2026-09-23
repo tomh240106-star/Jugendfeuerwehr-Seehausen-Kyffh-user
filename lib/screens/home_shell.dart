@@ -1966,6 +1966,8 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
   bool _loading = true;
   bool _saving = false;
   bool _notificationsEnabled = true;
+  bool _eventRemindersEnabled = true;
+  int _reminderMinutes = 30;
   String _role = '';
   String? _email;
 
@@ -1982,7 +1984,7 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
     final profile = await _supabase
         .from('profiles')
         .select(
-          'first_name,last_name,phone,role,notifications_enabled',
+          'first_name,last_name,phone,role,notifications_enabled,event_reminders_enabled,reminder_minutes',
         )
         .eq('id', user.id)
         .maybeSingle();
@@ -1997,6 +1999,8 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
       _role = profile?['role']?.toString() ?? '';
       _email = user.email;
       _notificationsEnabled = profile?['notifications_enabled'] != false;
+      _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;
+      _reminderMinutes = (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;
       _loading = false;
     });
   }
@@ -2055,6 +2059,8 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
         'last_name': _lastName.text.trim(),
         'phone': _phone.text.trim().isEmpty ? null : _phone.text.trim(),
         'notifications_enabled': _notificationsEnabled,
+        'event_reminders_enabled': _eventRemindersEnabled,
+        'reminder_minutes': _reminderMinutes,
       }).eq('id', user.id);
 
       if (!mounted) return;
@@ -2294,6 +2300,74 @@ class _MyProfileScreenState extends State<_MyProfileScreen> {
                           ),
                         ),
                       ),
+                      const Divider(height: 28),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Automatische Terminerinnerung',
+                          style: TextStyle(
+                            color: _navy,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Gilt für Termine und Ausbildungstermine mit Startzeit.',
+                        ),
+                        value: _eventRemindersEnabled,
+                        onChanged: _notificationsEnabled
+                            ? (value) {
+                                setState(() {
+                                  _eventRemindersEnabled = value;
+                                });
+                              }
+                            : null,
+                      ),
+                      if (_eventRemindersEnabled) ...[
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<int>(
+                          initialValue: _reminderMinutes,
+                          decoration: const InputDecoration(
+                            labelText: 'Erinnerung vor dem Termin',
+                            prefixIcon: Icon(Icons.schedule_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 15,
+                              child: Text('15 Minuten vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 30,
+                              child: Text('30 Minuten vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 60,
+                              child: Text('1 Stunde vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 120,
+                              child: Text('2 Stunden vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 180,
+                              child: Text('3 Stunden vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 1440,
+                              child: Text('1 Tag vorher'),
+                            ),
+                          ],
+                          onChanged: _notificationsEnabled
+                              ? (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _reminderMinutes = value;
+                                    });
+                                  }
+                                }
+                              : null,
+                        ),
+                      ],
                     ],
                   ),
                 ),
