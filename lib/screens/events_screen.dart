@@ -14,6 +14,8 @@ class _EventsScreenState extends State<EventsScreen> {
   bool _loading = true;
   bool _isTrainer = false;
   String? _role;
+  bool _eventRemindersEnabled = true;
+  int _reminderMinutes = 30;
   String? _error;
 
   List<Map<String, dynamic>> _events = [];
@@ -44,7 +46,7 @@ class _EventsScreenState extends State<EventsScreen> {
     try {
       final profile = await _supabase
           .from('profiles')
-          .select('id, role')
+          .select('id, role, event_reminders_enabled, reminder_minutes')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -58,6 +60,9 @@ class _EventsScreenState extends State<EventsScreen> {
       setState(() {
         _role = role;
         _isTrainer = role == 'ausbilder';
+        _eventRemindersEnabled = profile?['event_reminders_enabled'] != false;
+        _reminderMinutes =
+            (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;
       });
 
       debugPrint('Rolle: $role');
@@ -122,6 +127,30 @@ class _EventsScreenState extends State<EventsScreen> {
         _loading = false;
         _error = error.toString();
       });
+    }
+  }
+
+  String _reminderLabel() {
+    if (!_eventRemindersEnabled) return 'Ausgeschaltet';
+
+    switch (_reminderMinutes) {
+      case 15:
+        return '15 Min. vorher';
+      case 30:
+        return '30 Min. vorher';
+      case 60:
+        return '1 Std. vorher';
+      case 120:
+        return '2 Std. vorher';
+      case 180:
+        return '3 Std. vorher';
+      case 1440:
+        return '1 Tag vorher';
+      default:
+        if (_reminderMinutes % 60 == 0) {
+          return '${_reminderMinutes ~/ 60} Std. vorher';
+        }
+        return '$_reminderMinutes Min. vorher';
     }
   }
 
@@ -738,6 +767,13 @@ class _EventsScreenState extends State<EventsScreen> {
                 value: end == null
                     ? _time(start)
                     : '${_time(start)} - ${_time(end)}',
+              ),
+              _DetailRow(
+                icon: _eventRemindersEnabled
+                    ? Icons.notifications_active_outlined
+                    : Icons.notifications_off_outlined,
+                title: 'Erinnerung',
+                value: _reminderLabel(),
               ),
               if ((event['location'] ?? '').toString().isNotEmpty)
                 _DetailRow(
@@ -1389,6 +1425,39 @@ class _EventsScreenState extends State<EventsScreen> {
                                                   style: const TextStyle(
                                                     color: Color(0xFF4B5563),
                                                     fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  _eventRemindersEnabled
+                                                      ? Icons
+                                                          .notifications_active_outlined
+                                                      : Icons
+                                                          .notifications_off_outlined,
+                                                  size: 17,
+                                                  color: _eventRemindersEnabled
+                                                      ? const Color(0xFF0B4EA2)
+                                                      : const Color(0xFF98A2B3),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Erinnerung: ${_reminderLabel()}',
+                                                    style: TextStyle(
+                                                      color:
+                                                          _eventRemindersEnabled
+                                                              ? const Color(
+                                                                  0xFF0B4EA2)
+                                                              : const Color(
+                                                                  0xFF98A2B3),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
                                                   ),
                                                 ),
                                               ],
