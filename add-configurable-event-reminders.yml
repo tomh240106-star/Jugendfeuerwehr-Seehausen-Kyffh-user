@@ -1,0 +1,201 @@
+name: Add Configurable Event Reminders
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Patch profile reminder settings
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("lib/screens/home_shell.dart")
+          text = path.read_text(encoding="utf-8")
+
+          # Add state fields to _MyProfileScreenState.
+          old = """  bool _loading = true;
+            bool _saving = false;
+            bool _notificationsEnabled = true;
+            String _role = '';"""
+          new = """  bool _loading = true;
+            bool _saving = false;
+            bool _notificationsEnabled = true;
+            bool _eventRemindersEnabled = true;
+            int _reminderMinutes = 30;
+            String _role = '';"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif "bool _eventRemindersEnabled = true;" not in text:
+              raise SystemExit("Profile state fields anchor not found")
+
+          # Load reminder settings.
+          old = """          'first_name,last_name,phone,role,notifications_enabled',
+                )"""
+          new = """          'first_name,last_name,phone,role,notifications_enabled,event_reminders_enabled,reminder_minutes',
+                )"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif "event_reminders_enabled,reminder_minutes" not in text:
+              raise SystemExit("Profile select anchor not found")
+
+          old = """      _notificationsEnabled = profile?['notifications_enabled'] != false;
+                _loading = false;"""
+          new = """      _notificationsEnabled = profile?['notifications_enabled'] != false;
+                _eventRemindersEnabled =
+                    profile?['event_reminders_enabled'] != false;
+                _reminderMinutes =
+                    (profile?['reminder_minutes'] as num?)?.toInt() ?? 30;
+                _loading = false;"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif "_eventRemindersEnabled =" not in text:
+              raise SystemExit("Profile load state anchor not found")
+
+          # Save reminder settings.
+          old = """        'notifications_enabled': _notificationsEnabled,
+              }).eq('id', user.id);"""
+          new = """        'notifications_enabled': _notificationsEnabled,
+                'event_reminders_enabled': _eventRemindersEnabled,
+                'reminder_minutes': _reminderMinutes,
+              }).eq('id', user.id);"""
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif "'event_reminders_enabled': _eventRemindersEnabled" not in text:
+              raise SystemExit("Profile save anchor not found")
+
+          # Insert reminder controls below the existing notification description.
+          marker = """                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Termine, Nachrichten, Dokumente und Ausbildung',
+                          style: TextStyle(
+                            color: Color(0xFF667085),
+                          ),
+                        ),
+                      ),"""
+          controls = marker + """
+                      const Divider(height: 28),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text(
+                          'Automatische Terminerinnerung',
+                          style: TextStyle(
+                            color: _navy,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Gilt für Termine und Ausbildungstermine mit Startzeit.',
+                        ),
+                        value: _eventRemindersEnabled,
+                        onChanged: _notificationsEnabled
+                            ? (value) {
+                                setState(() {
+                                  _eventRemindersEnabled = value;
+                                });
+                              }
+                            : null,
+                      ),
+                      if (_eventRemindersEnabled) ...[
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<int>(
+                          initialValue: _reminderMinutes,
+                          decoration: const InputDecoration(
+                            labelText: 'Erinnerung vor dem Termin',
+                            prefixIcon: Icon(Icons.schedule_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 15,
+                              child: Text('15 Minuten vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 30,
+                              child: Text('30 Minuten vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 60,
+                              child: Text('1 Stunde vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 120,
+                              child: Text('2 Stunden vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 180,
+                              child: Text('3 Stunden vorher'),
+                            ),
+                            DropdownMenuItem(
+                              value: 1440,
+                              child: Text('1 Tag vorher'),
+                            ),
+                          ],
+                          onChanged: _notificationsEnabled
+                              ? (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _reminderMinutes = value;
+                                    });
+                                  }
+                                }
+                              : null,
+                        ),
+                      ],"""
+          if "Automatische Terminerinnerung" not in text:
+              if marker not in text:
+                  raise SystemExit("Notification description anchor not found")
+              text = text.replace(marker, controls, 1)
+
+          path.write_text(text, encoding="utf-8")
+
+          # Bump app version/build.
+          pubspec = Path("pubspec.yaml")
+          p = pubspec.read_text(encoding="utf-8")
+          if "version: 1.0.4+6" in p:
+              p = p.replace("version: 1.0.4+6", "version: 1.0.5+7", 1)
+          elif "version: 1.0.5+7" not in p:
+              raise SystemExit("Expected version 1.0.4+6 not found")
+          pubspec.write_text(p, encoding="utf-8")
+          PY
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Format
+        run: dart format lib/screens/home_shell.dart
+
+      - name: Analyze
+        run: flutter analyze lib/screens/home_shell.dart
+
+      - name: Commit
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add lib/screens/home_shell.dart pubspec.yaml
+          git commit -m "Add configurable event reminders"
+          git push origin main
