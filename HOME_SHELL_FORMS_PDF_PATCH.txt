@@ -1,0 +1,35 @@
+HOME_SHELL - FORMULARE & PDF
+=============================
+
+1) Oben bei den Screen-Imports ergänzen:
+
+import 'forms_pdf_screen.dart';
+
+
+2) Im Bereich:
+
+_MoreSection(
+  title: 'Ausbilderbereich',
+  children: [
+
+diesen Eintrag ergänzen, z. B. nach "Stammblätter" oder "Materialverwaltung":
+
+                      _MoreTile(
+                        icon: Icons.picture_as_pdf_outlined,
+                        title: 'Formulare & PDF',
+                        subtitle:
+                            'Ausbildungsnachweise, Materialausgabe und Stammdatenblätter',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const FormsPdfScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
+
+3) Danach ausführen:
+
+flutter pub get
+flutter analyze lib
