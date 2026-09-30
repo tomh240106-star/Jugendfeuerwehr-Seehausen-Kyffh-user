@@ -460,6 +460,54 @@ jobs:
 
       - name: Flutter Pub get
         run: flutter pub get
+       
+      - name: Optimize home images for Android package
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 <<'PY'
+          from pathlib import Path
+          from PIL import Image
+
+          files = [
+              "assets/home/jugendfeuerwehr_am_hafen_bei_sonnenuntergang.png",
+              "assets/home/jugendfeuerwehr_am_hafen_im_sonnenuntergang.png",
+              "assets/home/jugendfeuerwehr_plant_den_naechsten_einsatz.png",
+              "assets/home/jugendfeuerwehr_im_goldenen_abendlicht.png",
+              "assets/home/jugendfeuerwehr_am_goldenen_hafen.png",
+              "assets/home/feuerwehrteam_im_sonnenuntergang_am_hafen.png",
+              "assets/home/feuerwehrjugend_am_hafen_im_sonnenuntergang.png",
+              "assets/home/jugendfeuerwehr_am_goldenen_meereshorizont.png",
+          ]
+
+          total = 0
+          for filename in files:
+              path = Path(filename)
+              if not path.exists():
+                  raise SystemExit(f"Missing home image: {filename}")
+
+              image = Image.open(path).convert("RGB")
+              max_dimension = 768
+              if max(image.size) > max_dimension:
+                  scale = max_dimension / max(image.size)
+                  image = image.resize(
+                      (round(image.width * scale), round(image.height * scale)),
+                      Image.Resampling.LANCZOS,
+                  )
+
+              image = image.quantize(
+                  colors=128,
+                  method=Image.Quantize.MEDIANCUT,
+                  dither=Image.Dither.FLOYDSTEINBERG,
+              )
+              image.save(path, format="PNG", optimize=True)
+              size = path.stat().st_size
+              total += size
+              print(f"{filename}: {size} bytes")
+
+          print(f"Optimized Android home assets total: {total} bytes")
+          if total > 2 * 1024 * 1024:
+              raise SystemExit("Optimized home assets are unexpectedly larger than 2 MiB.")
+          PY
 
       - name: Verify branding assets
         run: |
