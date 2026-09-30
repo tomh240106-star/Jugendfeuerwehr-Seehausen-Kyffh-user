@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           FULL_VERSION="$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml | head -n1 | tr -d '"[:space:]')"
 
           if [[ -z "$FULL_VERSION" || "$FULL_VERSION" != *"+"* ]]; then
@@ -52,24 +53,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p downloaded/arm64 downloaded/armv7 downloaded/x86_64
 
-          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name jf-seehausen-apk-arm64-v8a --dir downloaded/arm64
-          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name jf-seehausen-apk-armeabi-v7a --dir downloaded/armv7
-          gh run download "$RUN_ID" --repo "${{ github.repository }}" --name jf-seehausen-apk-x86_64 --dir downloaded/x86_64
+          gh run download "$RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name jf-seehausen-apk-arm64-v8a \
+            --dir downloaded/arm64
+
+          gh run download "$RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name jf-seehausen-apk-armeabi-v7a \
+            --dir downloaded/armv7
+
+          gh run download "$RUN_ID" \
+            --repo "${{ github.repository }}" \
+            --name jf-seehausen-apk-x86_64 \
+            --dir downloaded/x86_64
 
       - name: Create clean release files
         shell: bash
         run: |
           set -euo pipefail
+
           VERSION="${{ steps.version.outputs.version_name }}"
           BUILD="${{ steps.version.outputs.build_number }}"
 
           mkdir -p release
 
-          cp "$(find downloaded/arm64 -type f -name '*.apk' | head -n1)" "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-arm64-v8a.apk"
-          cp "$(find downloaded/armv7 -type f -name '*.apk' | head -n1)" "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-armeabi-v7a.apk"
-          cp "$(find downloaded/x86_64 -type f -name '*.apk' | head -n1)" "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-x86_64.apk"
+          cp "$(find downloaded/arm64 -type f -name '*.apk' | head -n1)" \
+            "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-arm64-v8a.apk"
+
+          cp "$(find downloaded/armv7 -type f -name '*.apk' | head -n1)" \
+            "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-armeabi-v7a.apk"
+
+          cp "$(find downloaded/x86_64 -type f -name '*.apk' | head -n1)" \
+            "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-x86_64.apk"
 
       - name: Create checksums and manifest
         shell: bash
@@ -87,8 +106,8 @@ jobs:
 
           version = "${{ steps.version.outputs.version_name }}"
           build = int("${{ steps.version.outputs.build_number }}")
-          release_dir = Path("release")
 
+          release_dir = Path("release")
           files = []
 
           for abi in ("arm64-v8a", "armeabi-v7a", "x86_64"):
@@ -127,6 +146,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           MAX_BYTES=$((50 * 1024 * 1024))
 
           for APK in release/*.apk; do
@@ -138,6 +158,97 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Upload ARM64 and ARMv7 to Supabase Update Server
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version_name }}"
+          BUILD="${{ steps.version.outputs.build_number }}"
+
+          if [[ -z "${SUPABASE_URL:-}" ]]; then
+            echo "FEHLER: SUPABASE_URL Secret fehlt."
+            exit 1
+          fi
+
+          if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+            echo "FEHLER: SUPABASE_SERVICE_ROLE_KEY Secret fehlt."
+            exit 1
+          fi
+
+          upload_release() {
+            ABI="$1"
+            FILE="$2"
+
+            SIZE="$(stat -c%s "$FILE")"
+            SHA="$(sha256sum "$FILE" | awk '{print $1}')"
+
+            STORAGE_PATH="android/${BUILD}_${VERSION}_${ABI}.apk"
+
+            echo "Lade ${ABI} nach Supabase hoch..."
+
+            curl --fail-with-body \
+              --request POST \
+              "${SUPABASE_URL}/storage/v1/object/app-updates/${STORAGE_PATH}" \
+              --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "Content-Type: application/vnd.android.package-archive" \
+              --header "x-upsert: true" \
+              --data-binary "@${FILE}"
+
+            echo
+            echo "Trage ${ABI} in app_releases ein..."
+
+            JSON="$(
+              jq -n \
+                --arg version "$VERSION" \
+                --argjson build "$BUILD" \
+                --arg abi "$ABI" \
+                --arg path "$STORAGE_PATH" \
+                --arg sha "$SHA" \
+                --argjson size "$SIZE" \
+                --arg notes "Automatisch erstellt aus GitHub Android Build ${{ github.event.workflow_run.id }}" \
+                '{
+                  platform: "android",
+                  version_name: $version,
+                  build_number: $build,
+                  channel: "non",
+                  abi: $abi,
+                  storage_path: $path,
+                  sha256: $sha,
+                  file_size_bytes: $size,
+                  notes: $notes,
+                  force_update: false,
+                  is_active: true,
+                  created_by: null,
+                  updated_by: null
+                }'
+            )"
+
+            curl --fail-with-body \
+              --request POST \
+              "${SUPABASE_URL}/rest/v1/app_releases?on_conflict=platform,build_number,abi" \
+              --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+              --header "Content-Type: application/json" \
+              --header "Prefer: resolution=merge-duplicates,return=minimal" \
+              --data "${JSON}"
+
+            echo
+            echo "${ABI} erfolgreich angelegt."
+          }
+
+          upload_release \
+            "arm64-v8a" \
+            "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-arm64-v8a.apk"
+
+          upload_release \
+            "armeabi-v7a" \
+            "release/Jugendfeuerwehr-${VERSION}-build${BUILD}-armeabi-v7a.apk"
 
       - name: Upload complete release package
         uses: actions/upload-artifact@v4
@@ -157,7 +268,16 @@ jobs:
             echo
             echo "**Build:** ${{ steps.version.outputs.build_number }}"
             echo
-            echo "**Empfohlener Startkanal:** NON"
+            echo "**Update-Server:** automatisch hochgeladen"
             echo
-            echo "Enthalten: ARM64, ARMv7, x86_64, SHA256SUMS.txt und release_manifest.json"
+            echo "**ARM64:** NON"
+            echo
+            echo "**ARMv7:** NON"
+            echo
+            echo "**Pflichtupdate:** Nein"
+            echo
+            echo "**Aktiv:** Ja"
+            echo
+            echo
+            echo "Nach erfolgreichem Test im Update-Server auf BETA oder FOR ALL umstellen."
           } >> "$GITHUB_STEP_SUMMARY"
