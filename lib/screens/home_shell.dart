@@ -395,7 +395,6 @@ class _ModernDashboardState extends State<_ModernDashboard> {
           .order('starts_at');
 
       Map<String, dynamic>? nextEvent;
-      String? attendance;
       var openAttendanceCount = 0;
 
       if (eventRows.isNotEmpty) {
@@ -428,8 +427,6 @@ class _ModernDashboardState extends State<_ModernDashboard> {
             }
           }
 
-          attendance =
-              statusByEvent[nextEvent['id']?.toString()];
 
           for (final event in eventRows) {
             final eventId = event['id']?.toString();
