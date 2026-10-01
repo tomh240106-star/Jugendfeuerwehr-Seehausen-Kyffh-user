@@ -21,7 +21,6 @@ class AlarmScreen extends StatefulWidget {
 }
 
 class _AlarmScreenState extends State<AlarmScreen> {
-  static const _navy = Color(0xFF0A1F44);
   static const _blue = Color(0xFF0B4EA2);
   static const _red = Color(0xFFE30613);
   static const _green = Color(0xFF16A34A);
