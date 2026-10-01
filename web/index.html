@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="jf_seehausen_kyffhaeuser">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Jugendfeuerwehr Seehausen/Kyffhäuser</title>
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <!--
+    You can customize the "flutter_bootstrap.js" script.
+    This is useful to provide a custom configuration to the Flutter loader
+    or to give the user feedback during the initialization process.
+
+    For more details:
+    * https://docs.flutter.dev/platform-integration/web/initialization
+  -->
+
+  <!-- Firebase Web Push -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
+  <script>
+    const jfFirebaseConfig = {
+      apiKey: "AIzaSyAeoxELG1-LDMC49X4H9YnD1YaaIdrdxCA",
+      authDomain: "jugendfeuerwehr-seehausen.firebaseapp.com",
+      projectId: "jugendfeuerwehr-seehausen",
+      storageBucket: "jugendfeuerwehr-seehausen.firebasestorage.app",
+      messagingSenderId: "533422487075",
+      appId: "1:533422487075:web:d3e0a970adc728e5e4e396",
+      measurementId: "G-9W68CV9FK4"
+    };
+
+    const jfVapidKey =
+      "BGulxQWXKKuU_7xSYj1wbZv-9wpdsCyeODfbYW8P4_gQ_6f3ZSzYRtFtVSWweFmnzelmCeoHRocdwxFuXY5mgaE";
+
+    firebase.initializeApp(jfFirebaseConfig);
+    const jfMessaging = firebase.messaging();
+
+    let jfPushRegistrationPromise = null;
+
+    let jfAlarmAudio = null;
+
+    function jfGetAlarmAudio() {
+      if (!jfAlarmAudio) {
+        jfAlarmAudio = new Audio(
+          new URL("jf_alarm.wav", document.baseURI).toString()
+        );
+        jfAlarmAudio.loop = true;
+        jfAlarmAudio.preload = "auto";
+        jfAlarmAudio.volume = 1.0;
+      }
+      return jfAlarmAudio;
+    }
+
+    window.jfWebAlarmPrime = function () {
+      try {
+        const audio = jfGetAlarmAudio();
+        const oldVolume = audio.volume;
+        audio.volume = 0.0;
+        const promise = audio.play();
+        if (promise && promise.then) {
+          promise.then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+            audio.volume = oldVolume;
+          }).catch(() => {
+            audio.volume = oldVolume;
+          });
+        } else {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = oldVolume;
+        }
+      } catch (_) {}
+    };
+
+    window.jfWebAlarmStart = function (alarmId, title, body) {
+      try {
+        const audio = jfGetAlarmAudio();
+        audio.currentTime = 0;
+        audio.loop = true;
+        audio.volume = 1.0;
+        const promise = audio.play();
+        if (promise && promise.catch) {
+          promise.catch((error) => {
+            console.warn("Web-Alarmton konnte nicht gestartet werden:", error);
+          });
+        }
+      } catch (error) {
+        console.warn("Web-Alarmton Fehler:", error);
+      }
+    };
+
+    window.jfWebAlarmStop = function () {
+      try {
+        if (!jfAlarmAudio) return;
+        jfAlarmAudio.pause();
+        jfAlarmAudio.currentTime = 0;
+      } catch (_) {}
+    };
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("message", (event) => {
+        const message = event.data || {};
+
+        if (message.type === "jf_alarm_start") {
+          window.jfWebAlarmStart(
+            message.alarm_id || "active",
+            message.title || "JUGENDFEUERWEHR-ALARM",
+            message.body || "Alarm öffnen und Rückmeldung geben."
+          );
+        }
+
+        if (message.type === "jf_alarm_cancel") {
+          window.jfWebAlarmStop();
+        }
+      });
+    }
+
+
+    async function jfGetPushRegistration() {
+      if (!("serviceWorker" in navigator) ||
+          !("PushManager" in window) ||
+          !("Notification" in window)) {
+        throw new Error("Web Push wird von diesem Browser nicht unterstützt.");
+      }
+
+      if (!jfPushRegistrationPromise) {
+        const swUrl =
+          new URL("firebase-messaging-sw.js", document.baseURI).toString();
+        const scope =
+          new URL(
+            "firebase-cloud-messaging-push-scope/",
+            document.baseURI
+          ).pathname;
+
+        jfPushRegistrationPromise =
+          navigator.serviceWorker.register(swUrl, { scope });
+      }
+
+      return await jfPushRegistrationPromise;
+    }
+
+    window.jfWebPushRequestToken = async function () {
+      if (!("Notification" in window)) return "";
+
+      window.jfWebAlarmPrime();
+
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return "";
+
+      const registration = await jfGetPushRegistration();
+
+      return await jfMessaging.getToken({
+        vapidKey: jfVapidKey,
+        serviceWorkerRegistration: registration
+      });
+    };
+
+
+    jfMessaging.onMessage((payload) => {
+      const data = payload?.data || {};
+      const source = data.source || "";
+
+      if (source === "jf_alarm_cancel") {
+        window.jfWebAlarmStop();
+        return;
+      }
+
+      const isAlarm = source === "jf_alarm";
+
+      if (isAlarm) {
+        window.jfWebAlarmStart(
+          data.alarm_id || "active",
+          data.title || "JUGENDFEUERWEHR-ALARM",
+          data.body || "Alarm öffnen und Rückmeldung geben."
+        );
+      }
+
+      const title =
+        data.title ||
+        payload?.notification?.title ||
+        (isAlarm ? "JUGENDFEUERWEHR-ALARM" : "Jugendfeuerwehr");
+
+      const body =
+        data.body ||
+        payload?.notification?.body ||
+        (isAlarm
+          ? "Alarm öffnen und Rückmeldung geben."
+          : "Neue Benachrichtigung");
+
+      if (Notification.permission === "granted") {
+        jfGetPushRegistration().then((registration) => {
+          registration.showNotification(title, {
+            body,
+            icon: data.icon_url || "icons/Icon-192.png",
+            badge: data.icon_url || "icons/Icon-192.png",
+            tag: isAlarm
+              ? `jf-alarm-${data.alarm_id || "active"}`
+              : `jf-general-${Date.now()}`,
+            renotify: isAlarm,
+            requireInteraction: isAlarm,
+            silent: false,
+            vibrate: isAlarm
+              ? [500, 200, 500, 200, 900]
+              : [250, 120, 250],
+            data: {
+              ...data,
+              click_url:
+                data.click_url ||
+                window.location.origin +
+                  "/Jugendfeuerwehr-Seehausen-Kyffh-user/"
+            }
+          });
+        });
+      }
+    });
+
+    window.jfWebPushGetToken = async function () {
+      if (!("Notification" in window) ||
+          Notification.permission !== "granted") {
+        return "";
+      }
+
+      const registration = await jfGetPushRegistration();
+
+      return await jfMessaging.getToken({
+        vapidKey: jfVapidKey,
+        serviceWorkerRegistration: registration
+      });
+    };
+  </script>
+
+
+  <script>
+    // Offline app shell for the installed Web/PWA version.
+    // Firebase messaging continues to use firebase-messaging-sw.js
+    // in its separate push scope.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        const offlineSwUrl =
+          new URL("offline-sw.js", document.baseURI).toString();
+        navigator.serviceWorker
+          .register(offlineSwUrl)
+          .catch((error) =>
+            console.warn("Offline-Service-Worker konnte nicht registriert werden:", error)
+          );
+      });
+    }
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
