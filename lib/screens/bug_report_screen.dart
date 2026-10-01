@@ -119,7 +119,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
               textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
             ),
             child: DropdownButtonFormField<String>(
-            value: _area,
+            initialValue: _selectedArea,
             isExpanded: true,
             dropdownColor: _panel,
             iconEnabledColor: Colors.white,
