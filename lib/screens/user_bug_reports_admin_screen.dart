@@ -23,14 +23,21 @@ class _UserBugReportsAdminScreenState extends State<UserBugReportsAdminScreen> {
   @override
   void initState() { super.initState(); _load(); }
 
-  Future<bool> _isDeveloper() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return false;
-    return await NetworkRetryService.read(
-        () => _supabase.from('developer_access').select('user_id').eq('user_id', user.id).maybeSingle() != null,
-      );
-  }
+Future<bool> _isDeveloper() async {
+  final user = _supabase.auth.currentUser;
+  if (user == null) return false;
 
+  final row = await NetworkRetryService.read(
+    () => _supabase
+        .from('developer_access')
+        .select('user_id')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+  );
+
+  return row != null;
+}
+  
   Future<void> _load() async {
     setState(() { _loading = true; _error = null; });
     try {
